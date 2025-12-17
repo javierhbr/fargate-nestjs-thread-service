@@ -17,7 +17,11 @@
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
-    "test:e2e": "jest --config ./test/jest-e2e.json"
+    "test:e2e": "jest --config ./test/jest-e2e.json",
+    "clinic:doctor": "clinic doctor --on-port 'autocannon -c 10 -d 30 localhost:3000/health' -- node dist/main.js",
+    "clinic:bubble": "clinic bubbleprof --on-port 'autocannon -c 10 -d 30 localhost:3000/health' -- node dist/main.js",
+    "clinic:flame": "clinic flame --on-port 'autocannon -c 10 -d 30 localhost:3000/health' -- node dist/main.js",
+    "clinic:heap": "clinic heapprofiler --on-port 'autocannon -c 10 -d 30 localhost:3000/health' -- node dist/main.js"
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.490.0",
@@ -51,6 +55,8 @@
     "@types/uuid": "^9.0.7",
     "@typescript-eslint/eslint-plugin": "^6.18.1",
     "@typescript-eslint/parser": "^6.18.1",
+    "autocannon": "^8.0.0",
+    "clinic": "^13.0.0",
     "eslint": "^8.56.0",
     "eslint-config-prettier": "^9.1.0",
     "eslint-plugin-prettier": "^5.1.3",

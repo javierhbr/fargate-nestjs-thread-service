@@ -216,6 +216,38 @@ The service includes:
 - **Health Checks**: `/health` endpoint with detailed status
 - **Metrics**: Worker pool stats, queue depths, processing times
 
+## Performance Testing
+
+Detect event loop blocking, memory leaks, and performance issues using Clinic.js:
+
+```bash
+# Build the application
+npm run build
+
+# Test for event loop blocking
+npm run clinic:doctor
+
+# Analyze async operations
+npm run clinic:bubble
+
+# CPU profiling
+npm run clinic:flame
+
+# Memory leak detection
+npm run clinic:heap
+```
+
+**Quick Start:**
+```bash
+# Build and run Clinic Doctor to detect event loop blocking
+npm run build
+npm run clinic:doctor
+```
+
+For detailed performance testing guide, load testing, and interpreting results:
+- **Quick Reference:** [CLINIC_SETUP_SUMMARY.md](CLINIC_SETUP_SUMMARY.md) - Quick start and common scenarios
+- **Full Guide:** [PERFORMANCE_TESTING.md](PERFORMANCE_TESTING.md) - Comprehensive testing documentation
+
 ## Error Handling
 
 - **SQS Dead Letter Queues**: Failed messages moved to DLQ after 3 attempts

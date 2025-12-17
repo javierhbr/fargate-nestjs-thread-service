@@ -31,6 +31,17 @@ Thumbs.db
 coverage/
 .nyc_output/
 
+# Clinic.js profiling output
+.clinic/
+*.clinic-doctor
+*.clinic-doctor.html
+*.clinic-bubbleprof
+*.clinic-bubbleprof.html
+*.clinic-flamegraph
+*.clinic-flamegraph.html
+*.clinic-heapprofiler
+*.clinic-heapprofiler.html
+
 # Terraform
 *.tfstate
 *.tfstate.*
