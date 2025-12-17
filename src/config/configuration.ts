@@ -1,5 +1,34 @@
+/**
+ * Application Configuration Module
+ *
+ * Central configuration management for the export processing service.
+ * Loads and validates environment variables, providing type-safe access
+ * to all configuration values throughout the application.
+ *
+ * ## Configuration Sources:
+ * 1. Environment variables (`.env` file or system environment)
+ * 2. Validated by Zod schema in `validation.schema.ts`
+ * 3. Transformed into typed AppConfig object
+ *
+ * ## Usage:
+ * ```typescript
+ * // In NestJS service
+ * constructor(private configService: ConfigService<AppConfig>) {}
+ *
+ * const poolSize = this.configService.get('workerPool.poolSize', { infer: true });
+ * ```
+ *
+ * @module Configuration
+ */
+
 import { validateEnv, EnvConfig } from './validation.schema';
 
+/**
+ * Application configuration interface.
+ *
+ * Type-safe structure for all application settings. Organized by domain
+ * (aws, sqs, workerPool, etc.) for clarity and maintainability.
+ */
 export interface AppConfig {
   nodeEnv: string;
   port: number;
@@ -31,6 +60,65 @@ export interface AppConfig {
     timeout: number;
     maxRetries: number;
   };
+  /**
+   * Worker thread pool configuration.
+   *
+   * Controls the behavior of the worker thread pool that handles parallel file processing.
+   *
+   * ## Configuration Guidelines:
+   *
+   * ### poolSize (Environment: WORKER_POOL_SIZE)
+   * - Number of worker threads to spawn and maintain
+   * - **Recommended**: Number of CPU cores (or cores - 1 to leave one for main thread)
+   * - **Local development**: 2 workers (reduced load on dev machine)
+   * - **Production**: 4-8 workers depending on container CPU allocation
+   * - **Impact**: More workers = higher throughput but more memory usage
+   *
+   * ### maxConcurrentJobs (Environment: MAX_CONCURRENT_JOBS)
+   * - Maximum number of jobs that can be processed simultaneously
+   * - Acts as backpressure mechanism to prevent overload
+   * - **Recommended**: 2-4x poolSize (allows queueing without overwhelming workers)
+   * - **Local development**: 5 jobs
+   * - **Production**: 20 jobs (for 4 workers)
+   * - **Impact**: Higher = more parallelism but risk of memory exhaustion
+   *
+   * ### tempDir (Environment: TEMP_DIR)
+   * - Local filesystem path for temporary file storage during processing
+   * - Must be writable by application user
+   * - **Local development**: `/tmp/exports`
+   * - **Production (Fargate)**: `/tmp` (ephemeral storage, up to 20GB configurable)
+   * - **Cleanup**: Temp files cleaned up after successful upload or on error
+   *
+   * ### maxFileSizeMb (Environment: MAX_FILE_SIZE_MB)
+   * - Maximum file size in megabytes that workers will process
+   * - Prevents disk/memory exhaustion from large downloads
+   * - **Recommended**: 1024 MB (1 GB) for most use cases
+   * - **Adjust based on**: Available memory, network bandwidth, processing time
+   * - **Behavior**: Files exceeding limit fail with VALIDATION_ERROR (non-retryable)
+   *
+   * ## Tuning Recommendations:
+   *
+   * ### Memory-Constrained Environments (< 2GB RAM):
+   * ```
+   * WORKER_POOL_SIZE=2
+   * MAX_CONCURRENT_JOBS=4
+   * MAX_FILE_SIZE_MB=256
+   * ```
+   *
+   * ### Balanced Production Setup (4GB RAM, 2 vCPU):
+   * ```
+   * WORKER_POOL_SIZE=4
+   * MAX_CONCURRENT_JOBS=20
+   * MAX_FILE_SIZE_MB=1024
+   * ```
+   *
+   * ### High-Throughput Setup (8GB RAM, 4 vCPU):
+   * ```
+   * WORKER_POOL_SIZE=8
+   * MAX_CONCURRENT_JOBS=40
+   * MAX_FILE_SIZE_MB=1024
+   * ```
+   */
   workerPool: {
     poolSize: number;
     maxConcurrentJobs: number;

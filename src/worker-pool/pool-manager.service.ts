@@ -18,6 +18,18 @@ import {
 import { PoolStats, WorkerStats } from './interfaces/pool-stats.interface';
 import { ProcessingResult } from '../shared/interfaces/processing-result.interface';
 
+/**
+ * Wrapper interface for Node.js Worker Thread instances.
+ *
+ * Each worker is tracked with metadata to manage its lifecycle and monitor performance:
+ * - worker: The actual Worker instance from Node.js worker_threads module
+ * - workerId: Unique identifier for logging and tracking (0-based index)
+ * - isActive: Whether the worker is currently processing a task
+ * - currentTaskId: Optional ID of the task being processed (for debugging)
+ * - tasksCompleted: Counter for successfully completed tasks (monotonically increasing)
+ * - tasksFailed: Counter for failed tasks (monotonically increasing)
+ * - lastActivityAt: Timestamp of last task assignment (for health monitoring)
+ */
 interface WorkerWrapper {
   worker: Worker;
   workerId: number;
@@ -28,6 +40,15 @@ interface WorkerWrapper {
   lastActivityAt: Date;
 }
 
+/**
+ * Queued task with Promise resolution handlers.
+ *
+ * Tasks are queued when all workers are busy. Each queued task includes:
+ * - task: The download task to be processed
+ * - resolve: Promise resolver called with ProcessingResult on success
+ * - reject: Promise rejector called with Error on failure
+ * - queuedAt: Timestamp when task was queued (for queue time metrics)
+ */
 interface QueuedTask {
   task: DownloadTask;
   resolve: (result: ProcessingResult) => void;
@@ -35,22 +56,137 @@ interface QueuedTask {
   queuedAt: Date;
 }
 
+/**
+ * Worker Pool Manager Service
+ *
+ * Manages a pool of Node.js Worker Threads for parallel file download and processing.
+ *
+ * ## Architecture Overview:
+ *
+ * This service implements a thread pool pattern using Node.js worker_threads to process
+ * file downloads in parallel without blocking the main event loop. Each worker runs in
+ * an isolated V8 context with its own memory space.
+ *
+ * ## Key Responsibilities:
+ *
+ * 1. **Worker Lifecycle Management**
+ *    - Creates and initializes worker threads on module startup
+ *    - Monitors worker health and handles errors/exits
+ *    - Gracefully shuts down workers on module destruction
+ *
+ * 2. **Task Distribution**
+ *    - Queues tasks when all workers are busy
+ *    - Distributes tasks to available (idle) workers
+ *    - Tracks pending tasks and provides status updates
+ *
+ * 3. **Load Balancing**
+ *    - Round-robin task assignment to workers
+ *    - Prevents overloading by enforcing maxConcurrentJobs limit
+ *    - Queues excess tasks for later processing
+ *
+ * 4. **Communication**
+ *    - Uses message passing for worker communication (postMessage)
+ *    - Handles worker responses via message listeners
+ *    - Emits events for external monitoring (health, task completion)
+ *
+ * 5. **Metrics & Monitoring**
+ *    - Tracks completed/failed task counts
+ *    - Calculates average processing time
+ *    - Provides pool statistics via getPoolStats()
+ *
+ * ## Thread Safety:
+ *
+ * Workers operate in isolation with no shared memory. All communication happens via:
+ * - Structured cloning of messages (postMessage)
+ * - Message event listeners on both main thread and workers
+ * - No direct memory access between threads
+ *
+ * ## Configuration:
+ *
+ * Pool behavior is configured via environment variables:
+ * - WORKER_POOL_SIZE: Number of worker threads (default: 4)
+ * - MAX_CONCURRENT_JOBS: Max tasks in flight + queued (default: 20)
+ * - TEMP_DIR: Temporary directory for downloads
+ * - MAX_FILE_SIZE_MB: Maximum file size limit
+ *
+ * ## Performance Considerations:
+ *
+ * - Workers are CPU-bound for large files (compression, validation)
+ * - Pool size should match available CPU cores (typically 2-8)
+ * - Each worker has memory overhead (~10-50MB per worker)
+ * - Queue prevents memory exhaustion under high load
+ *
+ * ## Error Handling:
+ *
+ * - Worker crashes trigger automatic recreation
+ * - Task errors are isolated to individual workers
+ * - Failed tasks can be retried via SQS visibility timeout
+ * - Graceful shutdown waits for in-flight tasks to complete
+ */
 @Injectable()
 export class PoolManagerService
   extends EventEmitter
   implements OnModuleInit, OnModuleDestroy
 {
+  /**
+   * Map of all worker threads indexed by workerId.
+   * Used for O(1) lookup when routing messages from workers.
+   */
   private workers: Map<number, WorkerWrapper> = new Map();
+
+  /**
+   * FIFO queue of tasks waiting for an available worker.
+   * Tasks are added when all workers are busy and processed in order.
+   */
   private taskQueue: QueuedTask[] = [];
+
+  /**
+   * Map of tasks currently being processed, indexed by taskId.
+   * Used to track in-flight tasks and route completion/failure messages.
+   */
   private pendingTasks: Map<string, QueuedTask> = new Map();
+
+  /**
+   * Flag indicating graceful shutdown is in progress.
+   * When true, new tasks are rejected and workers complete current tasks.
+   */
   private isShuttingDown = false;
 
+  /**
+   * Number of worker threads in the pool (immutable after initialization).
+   * Configured via WORKER_POOL_SIZE environment variable.
+   */
   private readonly poolSize: number;
+
+  /**
+   * Maximum number of concurrent jobs (in-flight + queued).
+   * Configured via MAX_CONCURRENT_JOBS environment variable.
+   * Prevents memory exhaustion under high load.
+   */
   private readonly maxConcurrentJobs: number;
+
+  /**
+   * Configuration passed to each worker thread.
+   * Includes AWS credentials, temp directory, and file size limits.
+   */
   private readonly workerConfig: WorkerConfig;
 
+  /**
+   * Cumulative count of successfully completed tasks across all workers.
+   * Used for calculating pool statistics and monitoring.
+   */
   private completedTasksCount = 0;
+
+  /**
+   * Cumulative count of failed tasks across all workers.
+   * Used for error rate monitoring and alerting.
+   */
   private failedTasksCount = 0;
+
+  /**
+   * Sum of processing times for all completed tasks (in milliseconds).
+   * Used to calculate average processing time per task.
+   */
   private totalProcessingTimeMs = 0;
 
   constructor(
@@ -245,6 +381,30 @@ export class PoolManagerService
     }
   }
 
+  /**
+   * Submit a download task to the worker pool.
+   *
+   * This is the main entry point for external consumers to request file processing.
+   *
+   * ## Flow:
+   * 1. Check if pool is shutting down (reject if true)
+   * 2. Wrap task in QueuedTask with Promise handlers
+   * 3. Try to find an idle worker
+   * 4. If worker available: dispatch immediately
+   * 5. If all busy: add to queue for later processing
+   *
+   * ## Thread Safety:
+   * This method runs on the main thread and synchronously modifies pool state.
+   * Worker communication is async via message passing.
+   *
+   * ## Backpressure:
+   * Callers should check hasCapacity() before submitting to avoid queue buildup.
+   * The queue is unbounded, so excessive submissions can cause memory issues.
+   *
+   * @param task - The download task to process (includes URL, format, output location)
+   * @returns Promise that resolves with ProcessingResult when task completes
+   * @throws Error if pool is shutting down
+   */
   async submitTask(task: DownloadTask): Promise<ProcessingResult> {
     if (this.isShuttingDown) {
       throw new Error('Pool is shutting down');
@@ -273,6 +433,19 @@ export class PoolManagerService
     });
   }
 
+  /**
+   * Find an idle (not currently processing) worker.
+   *
+   * ## Algorithm:
+   * Linear search through workers map (O(n) where n = pool size).
+   * Returns first idle worker found (simple round-robin).
+   *
+   * ## Optimization Opportunity:
+   * Could maintain a separate Set of idle workers for O(1) lookup,
+   * but current approach is sufficient for small pool sizes (2-8 workers).
+   *
+   * @returns WorkerWrapper if idle worker found, null if all busy
+   */
   private getIdleWorker(): WorkerWrapper | null {
     for (const wrapper of this.workers.values()) {
       if (!wrapper.isActive) {
@@ -282,6 +455,27 @@ export class PoolManagerService
     return null;
   }
 
+  /**
+   * Dispatch a queued task to a specific worker thread.
+   *
+   * ## Steps:
+   * 1. Mark worker as active and update metadata
+   * 2. Add task to pendingTasks map for tracking
+   * 3. Construct message payload with task + config
+   * 4. Send message to worker via postMessage (async, non-blocking)
+   *
+   * ## Message Passing:
+   * Uses structured clone algorithm to serialize task data.
+   * Large objects (>1MB) may impact performance - use references when possible.
+   *
+   * ## Worker Communication Protocol:
+   * - Message type: PROCESS_TASK
+   * - Payload: { task: DownloadTask, config: WorkerConfig }
+   * - Response: TASK_COMPLETED or TASK_FAILED message
+   *
+   * @param wrapper - The worker to dispatch to (must be idle)
+   * @param queuedTask - The task with Promise handlers
+   */
   private dispatchToWorker(wrapper: WorkerWrapper, queuedTask: QueuedTask): void {
     wrapper.isActive = true;
     wrapper.currentTaskId = queuedTask.task.taskId;
@@ -306,6 +500,27 @@ export class PoolManagerService
     );
   }
 
+  /**
+   * Process the next queued task if a worker is available.
+   *
+   * ## When Called:
+   * - After a worker completes a task (becomes idle)
+   * - After a worker fails and is replaced
+   *
+   * ## Algorithm:
+   * 1. Check if queue is empty (early return if true)
+   * 2. Find an idle worker
+   * 3. If found: dequeue task (FIFO) and dispatch
+   * 4. If not found: task stays in queue
+   *
+   * ## Queue Ordering:
+   * FIFO (First In, First Out) ensures fairness.
+   * Tasks are processed in submission order.
+   *
+   * ## Starvation Prevention:
+   * All queued tasks will eventually be processed as workers become available.
+   * No priority system - all tasks treated equally.
+   */
   private processNextInQueue(): void {
     if (this.taskQueue.length === 0) return;
 
