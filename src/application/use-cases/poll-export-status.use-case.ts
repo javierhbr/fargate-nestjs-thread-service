@@ -56,7 +56,16 @@ export class PollExportStatusUseCase implements PollExportStatusPort {
       // Handle different status scenarios
       if (exportStatus.status.isReady()) {
         // Export is ready, transition job to downloading
-        const updatedJob = job.transitionToDownloading();
+        let updatedJob = job.transitionToDownloading();
+
+        // Set total tasks based on download URLs
+        if (exportStatus.downloadUrls && exportStatus.downloadUrls.length > 0) {
+          updatedJob = updatedJob.setTotalTasks(exportStatus.downloadUrls.length);
+          this.logger.debug(
+            `Set total tasks to ${exportStatus.downloadUrls.length} for job ${command.jobId}`,
+          );
+        }
+
         await this.jobRepository.updateJobState(command.jobId, updatedJob.jobState);
 
         return {

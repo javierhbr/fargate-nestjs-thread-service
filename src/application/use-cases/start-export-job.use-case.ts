@@ -69,7 +69,18 @@ export class StartExportJobUseCase implements StartExportJobPort {
       // Determine next action based on export status
       if (exportStatus.status.isReady()) {
         // Export is ready, can start downloading immediately
+        // Must transition through PROCESSING before DOWNLOADING per state machine
         job = job.withJobState(job.jobState.withStatus(JobStatusVO.processing()));
+        job = job.transitionToDownloading();
+
+        // Set total tasks based on download URLs
+        if (exportStatus.downloadUrls && exportStatus.downloadUrls.length > 0) {
+          job = job.setTotalTasks(exportStatus.downloadUrls.length);
+          this.logger.log(
+            `Set total tasks to ${exportStatus.downloadUrls.length} for job ${command.jobId}`,
+          );
+        }
+
         await this.jobRepository.updateJobState(command.jobId, job.jobState);
 
         return {

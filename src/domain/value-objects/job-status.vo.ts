@@ -54,6 +54,10 @@ export class JobStatusVO {
     return [JobStatus.COMPLETED, JobStatus.FAILED].includes(this._value);
   }
 
+  isPending(): boolean {
+    return this._value === JobStatus.PENDING;
+  }
+
   isCompleted(): boolean {
     return this._value === JobStatus.COMPLETED;
   }

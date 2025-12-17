@@ -52,3 +52,5 @@ coverage/
 # Temp
 tmp/
 temp/
+# Cucumber Reports
+test/reports/

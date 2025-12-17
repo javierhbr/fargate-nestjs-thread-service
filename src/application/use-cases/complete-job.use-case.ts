@@ -133,6 +133,9 @@ export class CompleteJobUseCase implements CompleteJobPort {
 
   /**
    * Send callback to Step Functions when job completes
+   *
+   * Always sends success callback when job completes - even with partial failures.
+   * The callback payload includes failedTasks count to indicate partial success.
    */
   private async sendStepFunctionsCallback(
     job: import('../../domain/entities/export-job.entity').ExportJobEntity,
@@ -142,34 +145,24 @@ export class CompleteJobUseCase implements CompleteJobPort {
     const taskToken = job.taskToken!;
 
     try {
+      // Always send success callback for job completion
+      // The payload includes failedTasks count to indicate partial success
+      await this.stepFunctions.sendTaskSuccess(taskToken, {
+        jobId: job.jobId,
+        exportId: job.exportId,
+        userId: job.userId,
+        status: 'COMPLETED',
+        totalTasks: job.totalTasks,
+        completedTasks: job.completedTasks,
+        failedTasks: job.failedTasks,
+        completedAt: job.jobState.updatedAt.toISOString(),
+        durationMs,
+      });
+
       if (success) {
-        // Send success callback
-        await this.stepFunctions.sendTaskSuccess(taskToken, {
-          jobId: job.jobId,
-          exportId: job.exportId,
-          userId: job.userId,
-          status: 'COMPLETED',
-          totalTasks: job.totalTasks,
-          completedTasks: job.completedTasks,
-          failedTasks: job.failedTasks,
-          completedAt: job.jobState.updatedAt.toISOString(),
-          durationMs,
-        });
-
-        this.logger.log(`Sent Step Functions success callback for job ${job.jobId}`);
+        this.logger.log(`Sent Step Functions success callback for job ${job.jobId} (all tasks succeeded)`);
       } else {
-        // Send failure callback
-        await this.stepFunctions.sendTaskFailure(taskToken, {
-          error: 'JobCompletedWithFailures',
-          cause: `Job completed with ${job.failedTasks} failed tasks out of ${job.totalTasks} total`,
-          jobId: job.jobId,
-          exportId: job.exportId,
-          totalTasks: job.totalTasks,
-          completedTasks: job.completedTasks,
-          failedTasks: job.failedTasks,
-        });
-
-        this.logger.log(`Sent Step Functions failure callback for job ${job.jobId}`);
+        this.logger.log(`Sent Step Functions success callback for job ${job.jobId} (partial success: ${job.failedTasks} failed tasks)`);
       }
     } catch (error) {
       // Log callback errors but don't fail the job
