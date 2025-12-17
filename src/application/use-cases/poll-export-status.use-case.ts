@@ -7,7 +7,6 @@ import {
 import { JobStateRepositoryPort } from '../ports/output/job-state-repository.port';
 import { ExportApiPort } from '../ports/output/export-api.port';
 import { EventPublisherPort } from '../ports/output/event-publisher.port';
-import { JobStatusVO } from '../../domain/value-objects/job-status.vo';
 import { JobFailedEvent } from '../../domain/events/job-failed.event';
 
 /**
@@ -36,7 +35,9 @@ export class PollExportStatusUseCase implements PollExportStatusPort {
 
       // Check if job is in a state that can be polled
       if (job.status.isTerminal()) {
-        this.logger.warn(`Job ${command.jobId} is in terminal state ${job.status.toString()}, skipping poll`);
+        this.logger.warn(
+          `Job ${command.jobId} is in terminal state ${job.status.toString()}, skipping poll`,
+        );
         return {
           job,
           isReady: false,
@@ -48,7 +49,9 @@ export class PollExportStatusUseCase implements PollExportStatusPort {
       // Get export status from external API
       const exportStatus = await this.exportApi.getExportStatus(job.exportId);
 
-      this.logger.debug(`Export ${job.exportId} status: ${exportStatus.status.toString()}`);
+      this.logger.debug(
+        `Export ${job.exportId} status: ${exportStatus.status.toString()}`,
+      );
 
       // Handle different status scenarios
       if (exportStatus.status.isReady()) {
@@ -65,7 +68,9 @@ export class PollExportStatusUseCase implements PollExportStatusPort {
         };
       } else if (exportStatus.status.isFailed() || exportStatus.status.isExpired()) {
         // Export failed or expired, mark job as failed
-        const errorMessage = exportStatus.errorMessage ?? `Export ${exportStatus.status.toString().toLowerCase()}`;
+        const errorMessage =
+          exportStatus.errorMessage ??
+          `Export ${exportStatus.status.toString().toLowerCase()}`;
         const updatedJob = job.transitionToFailed(errorMessage);
         await this.jobRepository.updateJobState(command.jobId, updatedJob.jobState);
 
@@ -75,7 +80,9 @@ export class PollExportStatusUseCase implements PollExportStatusPort {
           exportId: job.exportId,
           userId: job.userId,
           errorMessage,
-          failureReason: exportStatus.status.isFailed() ? 'export_failed' : 'export_expired',
+          failureReason: exportStatus.status.isFailed()
+            ? 'export_failed'
+            : 'export_expired',
         });
         await this.eventPublisher.publish(jobFailedEvent);
 
@@ -107,9 +114,12 @@ export class PollExportStatusUseCase implements PollExportStatusPort {
 
       // Try to mark job as failed
       try {
-        const errorMessage = error instanceof Error ? error.message : 'Polling failed';
-        const failedJobState = JobStatusVO.failed();
-        await this.jobRepository.updateJobState(command.jobId, failedJobState);
+        const job = await this.jobRepository.findById(command.jobId);
+        if (job) {
+          const errorMessage = error instanceof Error ? error.message : 'Polling failed';
+          const updatedJob = job.transitionToFailed(errorMessage);
+          await this.jobRepository.updateJobState(command.jobId, updatedJob.jobState);
+        }
       } catch (repoError) {
         this.logger.error(`Failed to update job state for ${command.jobId}:`, repoError);
       }

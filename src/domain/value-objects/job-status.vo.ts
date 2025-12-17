@@ -65,7 +65,11 @@ export class JobStatusVO {
   canTransitionTo(newStatus: JobStatusVO): boolean {
     const transitions: Record<JobStatus, JobStatus[]> = {
       [JobStatus.PENDING]: [JobStatus.PROCESSING, JobStatus.POLLING, JobStatus.FAILED],
-      [JobStatus.PROCESSING]: [JobStatus.DOWNLOADING, JobStatus.POLLING, JobStatus.FAILED],
+      [JobStatus.PROCESSING]: [
+        JobStatus.DOWNLOADING,
+        JobStatus.POLLING,
+        JobStatus.FAILED,
+      ],
       [JobStatus.POLLING]: [JobStatus.DOWNLOADING, JobStatus.FAILED],
       [JobStatus.DOWNLOADING]: [JobStatus.COMPLETED, JobStatus.FAILED],
       [JobStatus.COMPLETED]: [],

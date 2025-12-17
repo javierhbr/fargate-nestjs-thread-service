@@ -9,7 +9,11 @@ export interface JobFailedEventPayload {
   exportId: string;
   userId: string;
   errorMessage: string;
-  failureReason: 'export_failed' | 'export_expired' | 'polling_timeout' | 'all_tasks_failed';
+  failureReason:
+    | 'export_failed'
+    | 'export_expired'
+    | 'polling_timeout'
+    | 'all_tasks_failed';
 }
 
 export class JobFailedEvent extends DomainEvent {

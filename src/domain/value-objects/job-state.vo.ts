@@ -108,7 +108,10 @@ export class JobStateVO {
   }
 
   isComplete(): boolean {
-    return this._completedTasks + this._failedTasks === this._totalTasks && this._totalTasks > 0;
+    return (
+      this._completedTasks + this._failedTasks === this._totalTasks &&
+      this._totalTasks > 0
+    );
   }
 
   hasFailures(): boolean {

@@ -7,7 +7,10 @@
 
 // Entities
 export { ExportJobEntity, type ExportJobProps } from './entities/export-job.entity';
-export { DownloadTaskEntity, type DownloadTaskProps } from './entities/download-task.entity';
+export {
+  DownloadTaskEntity,
+  type DownloadTaskProps,
+} from './entities/download-task.entity';
 
 // Value Objects
 export { JobStateVO, type JobStateProps } from './value-objects/job-state.vo';

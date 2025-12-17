@@ -48,7 +48,9 @@ export class S3FileStorageAdapter implements FileStoragePort {
     buffer: Buffer,
     options?: UploadFileOptions,
   ): Promise<UploadResult> {
-    this.logger.debug(`Uploading buffer to S3: ${bucket}/${key} (${buffer.length} bytes)`);
+    this.logger.debug(
+      `Uploading buffer to S3: ${bucket}/${key} (${buffer.length} bytes)`,
+    );
 
     const result = await this.s3Service.uploadBuffer(bucket, key, buffer, {
       contentType: options?.contentType,
@@ -104,7 +106,11 @@ export class S3FileStorageAdapter implements FileStoragePort {
     };
   }
 
-  async downloadFile(bucket: string, key: string, destinationPath: string): Promise<void> {
+  async downloadFile(
+    bucket: string,
+    key: string,
+    destinationPath: string,
+  ): Promise<void> {
     this.logger.debug(`Downloading file from S3: ${bucket}/${key} to ${destinationPath}`);
 
     await this.s3Service.downloadFile(bucket, key, destinationPath);
@@ -115,7 +121,8 @@ export class S3FileStorageAdapter implements FileStoragePort {
       await this.s3Service.headObject(bucket, key);
       return true;
     } catch (error) {
-      if ((error as any).name === 'NotFound' || (error as any).$metadata?.httpStatusCode === 404) {
+      const err = error as { name?: string; $metadata?: { httpStatusCode?: number } };
+      if (err.name === 'NotFound' || err.$metadata?.httpStatusCode === 404) {
         return false;
       }
       throw error;

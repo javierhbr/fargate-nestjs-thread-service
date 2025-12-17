@@ -34,17 +34,21 @@ export class DynamoDbJobRepositoryAdapter implements JobStateRepositoryPort {
   }
 
   async updateJobState(jobId: string, jobState: JobStateVO): Promise<void> {
-    await this.dynamoDb.updateJobStatus(jobId, this.mapDomainStatusToDbStatus(jobState.status.toString()), {
-      totalTasks: jobState.totalTasks,
-      completedTasks: jobState.completedTasks,
-      failedTasks: jobState.failedTasks,
-      ...(jobState.errorMessage && {
-        error: {
-          code: 'JOB_ERROR',
-          message: jobState.errorMessage,
-        },
-      }),
-    });
+    await this.dynamoDb.updateJobStatus(
+      jobId,
+      this.mapDomainStatusToDbStatus(jobState.status.toString()),
+      {
+        totalTasks: jobState.totalTasks,
+        completedTasks: jobState.completedTasks,
+        failedTasks: jobState.failedTasks,
+        ...(jobState.errorMessage && {
+          error: {
+            code: 'JOB_ERROR',
+            message: jobState.errorMessage,
+          },
+        }),
+      },
+    );
 
     this.logger.debug(`Updated job state for ${jobId}`);
   }
@@ -104,6 +108,7 @@ export class DynamoDbJobRepositoryAdapter implements JobStateRepositoryPort {
       failedTasks: job.failedTasks,
       createdAt: job.jobState.createdAt.toISOString(),
       metadata: job.metadata,
+      ...(job.taskToken && { taskToken: job.taskToken }),
       ...(job.jobState.errorMessage && {
         error: {
           code: 'JOB_ERROR',
@@ -133,6 +138,7 @@ export class DynamoDbJobRepositoryAdapter implements JobStateRepositoryPort {
       userId: jobState.userId,
       jobState: domainJobState,
       metadata: jobState.metadata,
+      taskToken: jobState.taskToken,
     });
   }
 
@@ -142,12 +148,12 @@ export class DynamoDbJobRepositoryAdapter implements JobStateRepositoryPort {
   private mapDomainStatusToDbStatus(domainStatus: string): string {
     // Map domain status values to existing database enum values
     const statusMap: Record<string, string> = {
-      'PENDING': 'PENDING',
-      'PROCESSING': 'PROCESSING',
-      'POLLING': 'POLLING',
-      'DOWNLOADING': 'DOWNLOADING',
-      'COMPLETED': 'COMPLETED',
-      'FAILED': 'FAILED',
+      PENDING: 'PENDING',
+      PROCESSING: 'PROCESSING',
+      POLLING: 'POLLING',
+      DOWNLOADING: 'DOWNLOADING',
+      COMPLETED: 'COMPLETED',
+      FAILED: 'FAILED',
     };
 
     return statusMap[domainStatus.toUpperCase()] ?? 'PENDING';

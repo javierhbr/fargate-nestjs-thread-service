@@ -30,6 +30,7 @@ export interface JobState {
   };
   metadata?: Record<string, unknown>;
   ttl?: number;
+  taskToken?: string; // Step Functions task token for callbacks
 }
 
 @Injectable()

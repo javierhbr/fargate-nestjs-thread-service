@@ -47,7 +47,9 @@ export class FileMetadataVO {
         throw new Error('Expected file size cannot be negative');
       }
       if (props.expectedSize > FileMetadataVO.MAX_FILE_SIZE) {
-        throw new Error(`File size exceeds maximum allowed size of ${FileMetadataVO.MAX_FILE_SIZE} bytes`);
+        throw new Error(
+          `File size exceeds maximum allowed size of ${FileMetadataVO.MAX_FILE_SIZE} bytes`,
+        );
       }
     }
 

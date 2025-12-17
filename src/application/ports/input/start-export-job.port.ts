@@ -8,6 +8,7 @@ export interface StartExportJobCommand {
   exportId: string;
   userId: string;
   metadata?: Record<string, unknown>;
+  taskToken?: string;
 }
 
 /**

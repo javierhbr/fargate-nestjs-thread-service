@@ -25,17 +25,29 @@ export interface MessageQueuePort {
   /**
    * Send a single message to a queue
    */
-  sendMessage<T>(queueUrl: string, message: T, options?: SendMessageOptions): Promise<string>;
+  sendMessage<T>(
+    queueUrl: string,
+    message: T,
+    options?: SendMessageOptions,
+  ): Promise<string>;
 
   /**
    * Send multiple messages in a batch
    */
-  sendMessageBatch<T>(queueUrl: string, messages: T[], options?: SendMessageOptions): Promise<string[]>;
+  sendMessageBatch<T>(
+    queueUrl: string,
+    messages: T[],
+    options?: SendMessageOptions,
+  ): Promise<string[]>;
 
   /**
    * Receive messages from a queue
    */
-  receiveMessages<T>(queueUrl: string, maxMessages?: number, waitTimeSeconds?: number): Promise<QueueMessage<T>[]>;
+  receiveMessages<T>(
+    queueUrl: string,
+    maxMessages?: number,
+    waitTimeSeconds?: number,
+  ): Promise<QueueMessage<T>[]>;
 
   /**
    * Delete a message from the queue after processing
@@ -50,5 +62,9 @@ export interface MessageQueuePort {
   /**
    * Change the visibility timeout of a message
    */
-  changeMessageVisibility(queueUrl: string, receiptHandle: string, visibilityTimeout: number): Promise<void>;
+  changeMessageVisibility(
+    queueUrl: string,
+    receiptHandle: string,
+    visibilityTimeout: number,
+  ): Promise<void>;
 }

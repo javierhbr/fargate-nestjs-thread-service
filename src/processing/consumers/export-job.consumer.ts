@@ -53,10 +53,13 @@ export class ExportJobConsumer extends SqsConsumerBase<ExportJobMessage> {
       return; // Delete invalid message
     }
 
-    const { jobId, exportId, userId, metadata } = validatedMessage;
+    const { jobId, exportId, userId, metadata, taskToken } = validatedMessage;
     const jobLogger = this.logger.withJobId(jobId);
 
-    jobLogger.info({ exportId, userId }, 'Processing export job');
+    jobLogger.info(
+      { exportId, userId, hasTaskToken: !!taskToken },
+      'Processing export job',
+    );
 
     try {
       // Create job state
@@ -70,6 +73,7 @@ export class ExportJobConsumer extends SqsConsumerBase<ExportJobMessage> {
         failedTasks: 0,
         createdAt: new Date().toISOString(),
         metadata,
+        ...(taskToken && { taskToken }), // Include taskToken if present
       };
 
       await this.dynamoDb.createJobState(jobState);

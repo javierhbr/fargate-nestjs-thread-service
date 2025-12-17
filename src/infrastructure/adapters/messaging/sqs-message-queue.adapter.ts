@@ -16,7 +16,11 @@ export class SqsMessageQueueAdapter implements MessageQueuePort {
 
   constructor(private readonly sqsService: SqsService) {}
 
-  async sendMessage<T>(queueUrl: string, message: T, options?: SendMessageOptions): Promise<string> {
+  async sendMessage<T>(
+    queueUrl: string,
+    message: T,
+    options?: SendMessageOptions,
+  ): Promise<string> {
     this.logger.debug(`Sending message to queue: ${queueUrl}`);
 
     const result = await this.sqsService.sendMessage(queueUrl, {
@@ -29,7 +33,11 @@ export class SqsMessageQueueAdapter implements MessageQueuePort {
     return result.MessageId ?? '';
   }
 
-  async sendMessageBatch<T>(queueUrl: string, messages: T[], options?: SendMessageOptions): Promise<string[]> {
+  async sendMessageBatch<T>(
+    queueUrl: string,
+    messages: T[],
+    options?: SendMessageOptions,
+  ): Promise<string[]> {
     this.logger.debug(`Sending ${messages.length} messages to queue: ${queueUrl}`);
 
     const entries = messages.map((message, index) => ({
@@ -74,7 +82,9 @@ export class SqsMessageQueueAdapter implements MessageQueuePort {
     }));
 
     await this.sqsService.deleteMessageBatch(queueUrl, entries);
-    this.logger.debug(`Deleted ${receiptHandles.length} messages from queue: ${queueUrl}`);
+    this.logger.debug(
+      `Deleted ${receiptHandles.length} messages from queue: ${queueUrl}`,
+    );
   }
 
   async changeMessageVisibility(
@@ -82,7 +92,11 @@ export class SqsMessageQueueAdapter implements MessageQueuePort {
     receiptHandle: string,
     visibilityTimeout: number,
   ): Promise<void> {
-    await this.sqsService.changeMessageVisibility(queueUrl, receiptHandle, visibilityTimeout);
+    await this.sqsService.changeMessageVisibility(
+      queueUrl,
+      receiptHandle,
+      visibilityTimeout,
+    );
     this.logger.debug(`Changed message visibility in queue: ${queueUrl}`);
   }
 }

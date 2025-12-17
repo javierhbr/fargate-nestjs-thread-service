@@ -46,7 +46,9 @@ export class ExportStatusVO {
   }
 
   isTerminal(): boolean {
-    return [ExportStatus.READY, ExportStatus.FAILED, ExportStatus.EXPIRED].includes(this._value);
+    return [ExportStatus.READY, ExportStatus.FAILED, ExportStatus.EXPIRED].includes(
+      this._value,
+    );
   }
 
   isReady(): boolean {
@@ -62,7 +64,9 @@ export class ExportStatusVO {
   }
 
   isPending(): boolean {
-    return this._value === ExportStatus.PENDING || this._value === ExportStatus.PROCESSING;
+    return (
+      this._value === ExportStatus.PENDING || this._value === ExportStatus.PROCESSING
+    );
   }
 
   equals(other: ExportStatusVO): boolean {

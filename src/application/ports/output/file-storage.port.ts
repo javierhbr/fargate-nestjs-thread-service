@@ -40,17 +40,32 @@ export interface FileStoragePort {
   /**
    * Upload a file from a stream
    */
-  uploadStream(bucket: string, key: string, stream: Readable, options?: UploadFileOptions): Promise<UploadResult>;
+  uploadStream(
+    bucket: string,
+    key: string,
+    stream: Readable,
+    options?: UploadFileOptions,
+  ): Promise<UploadResult>;
 
   /**
    * Upload a file from a buffer
    */
-  uploadBuffer(bucket: string, key: string, buffer: Buffer, options?: UploadFileOptions): Promise<UploadResult>;
+  uploadBuffer(
+    bucket: string,
+    key: string,
+    buffer: Buffer,
+    options?: UploadFileOptions,
+  ): Promise<UploadResult>;
 
   /**
    * Upload a file from a local path
    */
-  uploadFile(bucket: string, key: string, filePath: string, options?: UploadFileOptions): Promise<UploadResult>;
+  uploadFile(
+    bucket: string,
+    key: string,
+    filePath: string,
+    options?: UploadFileOptions,
+  ): Promise<UploadResult>;
 
   /**
    * Download a file as a stream
@@ -85,5 +100,8 @@ export interface FileStoragePort {
   /**
    * Get file metadata
    */
-  getFileMetadata(bucket: string, key: string): Promise<{ contentLength: number; contentType?: string; etag?: string }>;
+  getFileMetadata(
+    bucket: string,
+    key: string,
+  ): Promise<{ contentLength: number; contentType?: string; etag?: string }>;
 }

@@ -5,6 +5,7 @@ import { ConfigModule } from '@nestjs/config';
 import { SqsModule } from '../shared/aws/sqs/sqs.module';
 import { S3Module } from '../shared/aws/s3/s3.module';
 import { DynamoDbModule } from '../shared/aws/dynamodb/dynamodb.module';
+import { StepFunctionsModule } from '../shared/aws/step-functions/step-functions.module';
 import { HttpClientModule } from '../shared/http/http-client.module';
 import { LoggingModule } from '../shared/logging/logging.module';
 
@@ -13,12 +14,14 @@ import { JobStateRepositoryPort } from '../application/ports/output/job-state-re
 import { MessageQueuePort } from '../application/ports/output/message-queue.port';
 import { FileStoragePort } from '../application/ports/output/file-storage.port';
 import { EventPublisherPort } from '../application/ports/output/event-publisher.port';
+import { StepFunctionsPort } from '../application/ports/output/step-functions.port';
 
 // Adapters (implementations)
 import { DynamoDbJobRepositoryAdapter } from './adapters/persistence/dynamodb-job-repository.adapter';
 import { SqsMessageQueueAdapter } from './adapters/messaging/sqs-message-queue.adapter';
 import { S3FileStorageAdapter } from './adapters/storage/s3-file-storage.adapter';
 import { ConsoleEventPublisherAdapter } from './adapters/events/console-event-publisher.adapter';
+import { StepFunctionsAdapter } from './adapters/step-functions/step-functions.adapter';
 
 /**
  * Infrastructure Module
@@ -36,6 +39,7 @@ import { ConsoleEventPublisherAdapter } from './adapters/events/console-event-pu
     SqsModule,
     S3Module,
     DynamoDbModule,
+    StepFunctionsModule,
     HttpClientModule,
   ],
   providers: [
@@ -67,6 +71,13 @@ import { ConsoleEventPublisherAdapter } from './adapters/events/console-event-pu
       useClass: ConsoleEventPublisherAdapter,
     },
 
+    // Step Functions adapter
+    StepFunctionsAdapter,
+    {
+      provide: StepFunctionsPort,
+      useClass: StepFunctionsAdapter,
+    },
+
     // Add other adapters here:
     // - ExportApiPort → ExportApiHttpAdapter
     // - WorkerPoolPort → WorkerPoolAdapter
@@ -77,6 +88,7 @@ import { ConsoleEventPublisherAdapter } from './adapters/events/console-event-pu
     MessageQueuePort,
     FileStoragePort,
     EventPublisherPort,
+    StepFunctionsPort,
   ],
 })
 export class InfrastructureModule {}

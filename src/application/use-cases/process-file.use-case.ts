@@ -1,7 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { createHash } from 'crypto';
-import { Readable } from 'stream';
-import { ProcessFileCommand, ProcessFilePort, ProcessFileResult } from '../ports/input/process-file.port';
+import {
+  ProcessFileCommand,
+  ProcessFilePort,
+  ProcessFileResult,
+} from '../ports/input/process-file.port';
 import { FileStoragePort } from '../ports/output/file-storage.port';
 
 /**
@@ -17,7 +20,9 @@ export class ProcessFileUseCase implements ProcessFilePort {
 
   async execute(command: ProcessFileCommand): Promise<ProcessFileResult> {
     const startTime = Date.now();
-    this.logger.log(`Processing file task ${command.taskId} for job ${command.jobId}: ${command.fileName}`);
+    this.logger.log(
+      `Processing file task ${command.taskId} for job ${command.jobId}: ${command.fileName}`,
+    );
 
     try {
       // Download file
@@ -26,7 +31,9 @@ export class ProcessFileUseCase implements ProcessFilePort {
 
       // Validate file size
       if (fileBuffer.length > this.MAX_FILE_SIZE) {
-        throw new Error(`File size ${fileBuffer.length} bytes exceeds maximum ${this.MAX_FILE_SIZE} bytes`);
+        throw new Error(
+          `File size ${fileBuffer.length} bytes exceeds maximum ${this.MAX_FILE_SIZE} bytes`,
+        );
       }
 
       if (command.expectedFileSize && fileBuffer.length !== command.expectedFileSize) {
@@ -37,7 +44,10 @@ export class ProcessFileUseCase implements ProcessFilePort {
 
       // Validate checksum if provided
       if (command.checksum && command.checksumAlgorithm) {
-        const actualChecksum = this.calculateChecksum(fileBuffer, command.checksumAlgorithm);
+        const actualChecksum = this.calculateChecksum(
+          fileBuffer,
+          command.checksumAlgorithm,
+        );
         if (actualChecksum !== command.checksum) {
           throw new Error(
             `Checksum validation failed. Expected: ${command.checksum}, Actual: ${actualChecksum}`,
@@ -47,14 +57,21 @@ export class ProcessFileUseCase implements ProcessFilePort {
       }
 
       // Upload to S3
-      this.logger.debug(`Uploading file to S3: ${command.s3Bucket}/${command.s3OutputKey}`);
-      await this.fileStorage.uploadBuffer(command.s3Bucket, command.s3OutputKey, fileBuffer, {
-        metadata: {
-          taskId: command.taskId,
-          jobId: command.jobId,
-          originalFileName: command.fileName,
+      this.logger.debug(
+        `Uploading file to S3: ${command.s3Bucket}/${command.s3OutputKey}`,
+      );
+      await this.fileStorage.uploadBuffer(
+        command.s3Bucket,
+        command.s3OutputKey,
+        fileBuffer,
+        {
+          metadata: {
+            taskId: command.taskId,
+            jobId: command.jobId,
+            originalFileName: command.fileName,
+          },
         },
-      });
+      );
 
       const processingDurationMs = Date.now() - startTime;
 
@@ -90,7 +107,9 @@ export class ProcessFileUseCase implements ProcessFilePort {
     const response = await fetch(url);
 
     if (!response.ok) {
-      throw new Error(`Failed to download file: ${response.status} ${response.statusText}`);
+      throw new Error(
+        `Failed to download file: ${response.status} ${response.statusText}`,
+      );
     }
 
     const arrayBuffer = await response.arrayBuffer();

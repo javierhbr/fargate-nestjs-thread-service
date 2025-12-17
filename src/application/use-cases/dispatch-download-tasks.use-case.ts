@@ -31,8 +31,12 @@ export class DispatchDownloadTasksUseCase implements DispatchDownloadTasksPort {
     private readonly s3Bucket: string,
   ) {}
 
-  async execute(command: DispatchDownloadTasksCommand): Promise<DispatchDownloadTasksResult> {
-    this.logger.log(`Dispatching ${command.downloadUrls.length} download tasks for job: ${command.jobId}`);
+  async execute(
+    command: DispatchDownloadTasksCommand,
+  ): Promise<DispatchDownloadTasksResult> {
+    this.logger.log(
+      `Dispatching ${command.downloadUrls.length} download tasks for job: ${command.jobId}`,
+    );
 
     try {
       // Retrieve job
@@ -112,7 +116,10 @@ export class DispatchDownloadTasksUseCase implements DispatchDownloadTasksPort {
         dispatchedTasks,
       };
     } catch (error) {
-      this.logger.error(`Failed to dispatch download tasks for job ${command.jobId}:`, error);
+      this.logger.error(
+        `Failed to dispatch download tasks for job ${command.jobId}:`,
+        error,
+      );
       throw error;
     }
   }

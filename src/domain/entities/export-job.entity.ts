@@ -16,6 +16,7 @@ export interface ExportJobProps {
   maxPollingAttempts?: number;
   pollingIntervalMs?: number;
   downloadTasks?: DownloadTaskEntity[];
+  taskToken?: string;
 }
 
 export class ExportJobEntity {
@@ -27,6 +28,7 @@ export class ExportJobEntity {
   private readonly _maxPollingAttempts: number;
   private readonly _pollingIntervalMs: number;
   private readonly _downloadTasks: DownloadTaskEntity[];
+  private readonly _taskToken?: string;
 
   private static readonly DEFAULT_MAX_POLLING_ATTEMPTS = 120; // 10 minutes at 5s intervals
   private static readonly DEFAULT_POLLING_INTERVAL_MS = 5000; // 5 seconds
@@ -37,9 +39,12 @@ export class ExportJobEntity {
     this._userId = props.userId;
     this._jobState = props.jobState;
     this._metadata = props.metadata ?? {};
-    this._maxPollingAttempts = props.maxPollingAttempts ?? ExportJobEntity.DEFAULT_MAX_POLLING_ATTEMPTS;
-    this._pollingIntervalMs = props.pollingIntervalMs ?? ExportJobEntity.DEFAULT_POLLING_INTERVAL_MS;
+    this._maxPollingAttempts =
+      props.maxPollingAttempts ?? ExportJobEntity.DEFAULT_MAX_POLLING_ATTEMPTS;
+    this._pollingIntervalMs =
+      props.pollingIntervalMs ?? ExportJobEntity.DEFAULT_POLLING_INTERVAL_MS;
     this._downloadTasks = props.downloadTasks ?? [];
+    this._taskToken = props.taskToken;
   }
 
   static create(props: ExportJobProps): ExportJobEntity {
@@ -102,6 +107,14 @@ export class ExportJobEntity {
 
   get downloadTasks(): ReadonlyArray<DownloadTaskEntity> {
     return this._downloadTasks;
+  }
+
+  get taskToken(): string | undefined {
+    return this._taskToken;
+  }
+
+  hasTaskToken(): boolean {
+    return this._taskToken !== undefined && this._taskToken.length > 0;
   }
 
   get totalTasks(): number {
@@ -218,7 +231,9 @@ export class ExportJobEntity {
   }
 
   updateDownloadTask(updatedTask: DownloadTaskEntity): ExportJobEntity {
-    const taskIndex = this._downloadTasks.findIndex((task) => task.taskId === updatedTask.taskId);
+    const taskIndex = this._downloadTasks.findIndex(
+      (task) => task.taskId === updatedTask.taskId,
+    );
     if (taskIndex === -1) {
       throw new Error(`Task ${updatedTask.taskId} not found in job`);
     }
@@ -254,6 +269,7 @@ export class ExportJobEntity {
       maxPollingAttempts: this._maxPollingAttempts,
       pollingIntervalMs: this._pollingIntervalMs,
       downloadTasks: this._downloadTasks,
+      taskToken: this._taskToken,
     };
   }
 
@@ -267,6 +283,7 @@ export class ExportJobEntity {
       maxPollingAttempts: this._maxPollingAttempts,
       pollingIntervalMs: this._pollingIntervalMs,
       downloadTasks: this._downloadTasks.map((task) => task.toJSON()),
+      taskToken: this._taskToken,
     };
   }
 }

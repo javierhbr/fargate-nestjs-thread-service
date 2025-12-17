@@ -28,7 +28,9 @@ export class StartExportJobUseCase implements StartExportJobPort {
   ) {}
 
   async execute(command: StartExportJobCommand): Promise<StartExportJobResult> {
-    this.logger.log(`Starting export job: ${command.jobId} for export: ${command.exportId}`);
+    this.logger.log(
+      `Starting export job: ${command.jobId} for export: ${command.exportId}`,
+    );
 
     try {
       // Create initial job entity
@@ -42,6 +44,7 @@ export class StartExportJobUseCase implements StartExportJobPort {
         userId: command.userId,
         jobState: initialJobState,
         metadata: command.metadata,
+        taskToken: command.taskToken,
       });
 
       // Save initial job state
@@ -59,7 +62,9 @@ export class StartExportJobUseCase implements StartExportJobPort {
       // Check export status from external API
       const exportStatus = await this.exportApi.getExportStatus(command.exportId);
 
-      this.logger.log(`Export ${command.exportId} status: ${exportStatus.status.toString()}`);
+      this.logger.log(
+        `Export ${command.exportId} status: ${exportStatus.status.toString()}`,
+      );
 
       // Determine next action based on export status
       if (exportStatus.status.isReady()) {
@@ -84,7 +89,9 @@ export class StartExportJobUseCase implements StartExportJobPort {
         };
       } else if (exportStatus.status.isFailed() || exportStatus.status.isExpired()) {
         // Export failed or expired, mark job as failed
-        const errorMessage = exportStatus.errorMessage ?? `Export ${exportStatus.status.toString().toLowerCase()}`;
+        const errorMessage =
+          exportStatus.errorMessage ??
+          `Export ${exportStatus.status.toString().toLowerCase()}`;
         job = job.transitionToFailed(errorMessage);
         await this.jobRepository.updateJobState(command.jobId, job.jobState);
 
@@ -94,7 +101,9 @@ export class StartExportJobUseCase implements StartExportJobPort {
           exportId: command.exportId,
           userId: command.userId,
           errorMessage,
-          failureReason: exportStatus.status.isFailed() ? 'export_failed' : 'export_expired',
+          failureReason: exportStatus.status.isFailed()
+            ? 'export_failed'
+            : 'export_expired',
         });
         await this.eventPublisher.publish(jobFailedEvent);
 
@@ -117,7 +126,10 @@ export class StartExportJobUseCase implements StartExportJobPort {
       // Try to mark job as failed in repository
       try {
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        const failedJobState = JobStateVO.create({ status: JobStatusVO.failed(), errorMessage });
+        const failedJobState = JobStateVO.create({
+          status: JobStatusVO.failed(),
+          errorMessage,
+        });
         await this.jobRepository.updateJobState(command.jobId, failedJobState);
       } catch (repoError) {
         this.logger.error(`Failed to update job state for ${command.jobId}:`, repoError);

@@ -42,7 +42,11 @@ export interface ExportApiPort {
    * @param maxAttempts - Maximum number of polling attempts
    * @param intervalMs - Interval between polls in milliseconds
    */
-  pollUntilReady(exportId: string, maxAttempts: number, intervalMs: number): Promise<ExportApiResponse>;
+  pollUntilReady(
+    exportId: string,
+    maxAttempts: number,
+    intervalMs: number,
+  ): Promise<ExportApiResponse>;
 
   /**
    * Cancel an export (if supported by the API)

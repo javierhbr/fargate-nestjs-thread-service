@@ -6,6 +6,7 @@ export const ExportJobMessageSchema = z.object({
   userId: z.string(),
   callbackUrl: z.string().url().optional(),
   metadata: z.record(z.unknown()).optional(),
+  taskToken: z.string().optional(), // Step Functions task token for callbacks
 });
 
 export type ExportJobMessageDto = z.infer<typeof ExportJobMessageSchema>;
