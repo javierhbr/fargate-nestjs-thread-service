@@ -44,7 +44,7 @@ export class ProcessFileUseCase implements ProcessFilePort {
 
       // Validate checksum if provided
       if (command.checksum && command.checksumAlgorithm) {
-        const actualChecksum = this.calculateChecksum(
+        const actualChecksum = await this.calculateChecksumAsync(
           fileBuffer,
           command.checksumAlgorithm,
         );
@@ -103,6 +103,10 @@ export class ProcessFileUseCase implements ProcessFilePort {
     }
   }
 
+  /**
+   * Download file with streaming to avoid blocking event loop on large files
+   * Uses chunked buffer accumulation with periodic yields
+   */
   private async downloadFile(url: string): Promise<Buffer> {
     const response = await fetch(url);
 
@@ -112,10 +116,73 @@ export class ProcessFileUseCase implements ProcessFilePort {
       );
     }
 
-    const arrayBuffer = await response.arrayBuffer();
-    return Buffer.from(arrayBuffer);
+    if (!response.body) {
+      throw new Error('Response body is null');
+    }
+
+    const chunks: Buffer[] = [];
+    const reader = response.body.getReader();
+
+    try {
+      let chunkCount = 0;
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        chunks.push(Buffer.from(value));
+        chunkCount++;
+
+        // Yield to event loop every 10 chunks to prevent blocking
+        // Each chunk is typically 16KB-64KB, so this yields every ~160KB-640KB
+        if (chunkCount % 10 === 0) {
+          await new Promise((resolve) => setImmediate(resolve));
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
+
+    // Concatenate all chunks into final buffer
+    // For very large files, yield before final concatenation
+    if (chunks.length > 100) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+
+    return Buffer.concat(chunks);
   }
 
+  /**
+   * Calculate checksum asynchronously with chunked processing
+   * Prevents event loop blocking on large files (up to 5GB)
+   */
+  private async calculateChecksumAsync(
+    buffer: Buffer,
+    algorithm: 'SHA-256' | 'MD5',
+  ): Promise<string> {
+    const hashAlgorithm = algorithm === 'SHA-256' ? 'sha256' : 'md5';
+    const hash = createHash(hashAlgorithm);
+
+    // Process in 1MB chunks to allow event loop to breathe
+    const CHUNK_SIZE = 1024 * 1024; // 1MB
+
+    for (let i = 0; i < buffer.length; i += CHUNK_SIZE) {
+      const chunk = buffer.slice(i, Math.min(i + CHUNK_SIZE, buffer.length));
+      hash.update(chunk);
+
+      // Yield to event loop after each chunk
+      // For a 5GB file, this yields ~5000 times, preventing any long blocking
+      if (i + CHUNK_SIZE < buffer.length) {
+        await new Promise((resolve) => setImmediate(resolve));
+      }
+    }
+
+    return hash.digest('hex');
+  }
+
+  /**
+   * Legacy synchronous checksum calculation (kept for backward compatibility)
+   * @deprecated Use calculateChecksumAsync for large files
+   */
   private calculateChecksum(buffer: Buffer, algorithm: 'SHA-256' | 'MD5'): string {
     const hashAlgorithm = algorithm === 'SHA-256' ? 'sha256' : 'md5';
     const hash = createHash(hashAlgorithm);

@@ -22,7 +22,7 @@ export class InMemoryJobRepositoryAdapter implements JobStateRepositoryPort {
     return job ? this.cloneJob(job) : null;
   }
 
-  async updateJobState(jobId: string, jobState: JobStateVO): Promise<void> {
+  async updateJobState(jobId: string, jobState: JobStateVO): Promise<ExportJobEntity> {
     const job = this.jobs.get(jobId);
     if (!job) {
       throw new Error(`Job not found: ${jobId}`);
@@ -31,9 +31,12 @@ export class InMemoryJobRepositoryAdapter implements JobStateRepositoryPort {
     // Create a new entity with the updated job state (entities are immutable)
     const updatedJob = job.withJobState(jobState);
     this.jobs.set(jobId, updatedJob);
+
+    // Return cloned entity to prevent stale data usage
+    return this.cloneJob(updatedJob);
   }
 
-  async incrementCompletedTasks(jobId: string): Promise<void> {
+  async incrementCompletedTasks(jobId: string): Promise<ExportJobEntity> {
     const job = this.jobs.get(jobId);
     if (!job) {
       throw new Error(`Job not found: ${jobId}`);
@@ -41,9 +44,12 @@ export class InMemoryJobRepositoryAdapter implements JobStateRepositoryPort {
 
     const updatedJob = job.incrementCompletedTasks();
     this.jobs.set(jobId, updatedJob);
+
+    // Return cloned entity to prevent stale data usage
+    return this.cloneJob(updatedJob);
   }
 
-  async incrementFailedTasks(jobId: string, errorMessage?: string): Promise<void> {
+  async incrementFailedTasks(jobId: string, errorMessage?: string): Promise<ExportJobEntity> {
     const job = this.jobs.get(jobId);
     if (!job) {
       throw new Error(`Job not found: ${jobId}`);
@@ -51,9 +57,12 @@ export class InMemoryJobRepositoryAdapter implements JobStateRepositoryPort {
 
     const updatedJob = job.incrementFailedTasks(errorMessage);
     this.jobs.set(jobId, updatedJob);
+
+    // Return cloned entity to prevent stale data usage
+    return this.cloneJob(updatedJob);
   }
 
-  async setTotalTasks(jobId: string, totalTasks: number): Promise<void> {
+  async setTotalTasks(jobId: string, totalTasks: number): Promise<ExportJobEntity> {
     const job = this.jobs.get(jobId);
     if (!job) {
       throw new Error(`Job not found: ${jobId}`);
@@ -61,6 +70,9 @@ export class InMemoryJobRepositoryAdapter implements JobStateRepositoryPort {
 
     const updatedJob = job.setTotalTasks(totalTasks);
     this.jobs.set(jobId, updatedJob);
+
+    // Return cloned entity to prevent stale data usage
+    return this.cloneJob(updatedJob);
   }
 
   async delete(jobId: string): Promise<void> {

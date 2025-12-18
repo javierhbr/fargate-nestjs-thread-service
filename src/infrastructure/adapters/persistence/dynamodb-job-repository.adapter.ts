@@ -33,7 +33,7 @@ export class DynamoDbJobRepositoryAdapter implements JobStateRepositoryPort {
     return this.toDomainEntity(jobState);
   }
 
-  async updateJobState(jobId: string, jobState: JobStateVO): Promise<void> {
+  async updateJobState(jobId: string, jobState: JobStateVO): Promise<ExportJobEntity> {
     await this.dynamoDb.updateJobStatus(
       jobId,
       this.mapDomainStatusToDbStatus(jobState.status.toString()),
@@ -51,14 +51,28 @@ export class DynamoDbJobRepositoryAdapter implements JobStateRepositoryPort {
     );
 
     this.logger.debug(`Updated job state for ${jobId}`);
+
+    // Return the updated entity to prevent stale data usage
+    const updatedJobState = await this.dynamoDb.getJobState(jobId);
+    if (!updatedJobState) {
+      throw new Error(`Job ${jobId} not found after update`);
+    }
+    return this.toDomainEntity(updatedJobState);
   }
 
-  async incrementCompletedTasks(jobId: string): Promise<void> {
+  async incrementCompletedTasks(jobId: string): Promise<ExportJobEntity> {
     await this.dynamoDb.incrementTaskCount(jobId, 'completedTasks');
     this.logger.debug(`Incremented completed tasks for job ${jobId}`);
+
+    // Return the updated entity to prevent stale data usage
+    const updatedJobState = await this.dynamoDb.getJobState(jobId);
+    if (!updatedJobState) {
+      throw new Error(`Job ${jobId} not found after increment`);
+    }
+    return this.toDomainEntity(updatedJobState);
   }
 
-  async incrementFailedTasks(jobId: string, errorMessage?: string): Promise<void> {
+  async incrementFailedTasks(jobId: string, errorMessage?: string): Promise<ExportJobEntity> {
     await this.dynamoDb.incrementTaskCount(jobId, 'failedTasks');
 
     if (errorMessage) {
@@ -75,11 +89,25 @@ export class DynamoDbJobRepositoryAdapter implements JobStateRepositoryPort {
     }
 
     this.logger.debug(`Incremented failed tasks for job ${jobId}`);
+
+    // Return the updated entity to prevent stale data usage
+    const updatedJobState = await this.dynamoDb.getJobState(jobId);
+    if (!updatedJobState) {
+      throw new Error(`Job ${jobId} not found after increment`);
+    }
+    return this.toDomainEntity(updatedJobState);
   }
 
-  async setTotalTasks(jobId: string, totalTasks: number): Promise<void> {
+  async setTotalTasks(jobId: string, totalTasks: number): Promise<ExportJobEntity> {
     await this.dynamoDb.setTotalTasks(jobId, totalTasks);
     this.logger.debug(`Set total tasks to ${totalTasks} for job ${jobId}`);
+
+    // Return the updated entity to prevent stale data usage
+    const updatedJobState = await this.dynamoDb.getJobState(jobId);
+    if (!updatedJobState) {
+      throw new Error(`Job ${jobId} not found after setTotalTasks`);
+    }
+    return this.toDomainEntity(updatedJobState);
   }
 
   async delete(jobId: string): Promise<void> {

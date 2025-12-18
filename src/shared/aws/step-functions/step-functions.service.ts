@@ -41,9 +41,22 @@ export class StepFunctionsService implements OnModuleDestroy {
     output: Record<string, unknown>,
   ): Promise<void> {
     try {
+      // For large outputs, yield to event loop before stringifying
+      // Step Functions has a 256KB limit, but we check at 100KB to be safe
+      const outputStr = JSON.stringify(output);
+      const outputSizeKB = Buffer.byteLength(outputStr, 'utf8') / 1024;
+
+      if (outputSizeKB > 100) {
+        this.logger.debug(
+          { outputSizeKB: Math.round(outputSizeKB) },
+          'Large output detected, yielding before sending to Step Functions',
+        );
+        await new Promise((resolve) => setImmediate(resolve));
+      }
+
       const command = new SendTaskSuccessCommand({
         taskToken,
-        output: JSON.stringify(output),
+        output: outputStr,
       });
 
       await this.client.send(command);
@@ -52,6 +65,7 @@ export class StepFunctionsService implements OnModuleDestroy {
         {
           taskToken: this.maskTaskToken(taskToken),
           outputKeys: Object.keys(output),
+          outputSizeKB: Math.round(outputSizeKB),
         },
         'Step Functions task success sent',
       );

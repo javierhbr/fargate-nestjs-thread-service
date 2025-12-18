@@ -326,7 +326,8 @@ export namespace ExportJobEntity {
     }
 
     const updated = produce(job, (draft) => {
-      (draft.downloadTasks as DownloadTaskEntity[]).push(task);
+      // Immer handles readonly arrays correctly - no cast needed
+      draft.downloadTasks.push(task);
     });
     return attachMethods(updated);
   }
@@ -341,7 +342,8 @@ export namespace ExportJobEntity {
     }
 
     const updated = produce(job, (draft) => {
-      (draft.downloadTasks as DownloadTaskEntity[]).push(...tasks);
+      // Immer handles readonly arrays correctly - no cast needed
+      draft.downloadTasks.push(...tasks);
     });
     return attachMethods(updated);
   }
@@ -358,7 +360,8 @@ export namespace ExportJobEntity {
     }
 
     const updated = produce(job, (draft) => {
-      (draft.downloadTasks as DownloadTaskEntity[])[taskIndex] = updatedTask;
+      // Immer handles readonly arrays correctly - no cast needed
+      draft.downloadTasks[taskIndex] = updatedTask;
     });
     return attachMethods(updated);
   }
@@ -379,6 +382,78 @@ export namespace ExportJobEntity {
     return job.downloadTasks.filter((task) => task.shouldRetry());
   }
 
+  /**
+   * Async version of getPendingDownloadTasks for large task lists
+   * Yields to event loop every 100 tasks to prevent blocking
+   */
+  export async function getPendingDownloadTasksAsync(
+    job: ExportJobEntityData,
+  ): Promise<DownloadTaskEntity[]> {
+    const result: DownloadTaskEntity[] = [];
+    const tasks = job.downloadTasks;
+
+    for (let i = 0; i < tasks.length; i++) {
+      if (tasks[i].isPending()) {
+        result.push(tasks[i]);
+      }
+
+      // Yield to event loop every 100 iterations
+      if (i > 0 && i % 100 === 0) {
+        await new Promise((resolve) => setImmediate(resolve));
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Async version of getFailedDownloadTasks for large task lists
+   * Yields to event loop every 100 tasks to prevent blocking
+   */
+  export async function getFailedDownloadTasksAsync(
+    job: ExportJobEntityData,
+  ): Promise<DownloadTaskEntity[]> {
+    const result: DownloadTaskEntity[] = [];
+    const tasks = job.downloadTasks;
+
+    for (let i = 0; i < tasks.length; i++) {
+      if (tasks[i].isFailed()) {
+        result.push(tasks[i]);
+      }
+
+      // Yield to event loop every 100 iterations
+      if (i > 0 && i % 100 === 0) {
+        await new Promise((resolve) => setImmediate(resolve));
+      }
+    }
+
+    return result;
+  }
+
+  /**
+   * Async version of getRetryableDownloadTasks for large task lists
+   * Yields to event loop every 100 tasks to prevent blocking
+   */
+  export async function getRetryableDownloadTasksAsync(
+    job: ExportJobEntityData,
+  ): Promise<DownloadTaskEntity[]> {
+    const result: DownloadTaskEntity[] = [];
+    const tasks = job.downloadTasks;
+
+    for (let i = 0; i < tasks.length; i++) {
+      if (tasks[i].shouldRetry()) {
+        result.push(tasks[i]);
+      }
+
+      // Yield to event loop every 100 iterations
+      if (i > 0 && i % 100 === 0) {
+        await new Promise((resolve) => setImmediate(resolve));
+      }
+    }
+
+    return result;
+  }
+
   // ===== Serialization =====
 
   export function toJSON(job: ExportJobEntityData) {
@@ -391,6 +466,36 @@ export namespace ExportJobEntity {
       maxPollingAttempts: job.maxPollingAttempts,
       pollingIntervalMs: job.pollingIntervalMs,
       downloadTasks: job.downloadTasks.map((task) => task.toJSON()),
+      taskToken: job.taskToken,
+    };
+  }
+
+  /**
+   * Async JSON serialization for large jobs with many download tasks
+   * Yields to event loop every 100 tasks to prevent blocking
+   */
+  export async function toJSONAsync(job: ExportJobEntityData) {
+    const tasks: ReturnType<DownloadTaskEntity['toJSON']>[] = [];
+
+    // Serialize download tasks with periodic yields
+    for (let i = 0; i < job.downloadTasks.length; i++) {
+      tasks.push(job.downloadTasks[i].toJSON());
+
+      // Yield every 100 tasks to prevent event loop blocking
+      if (i > 0 && i % 100 === 0) {
+        await new Promise((resolve) => setImmediate(resolve));
+      }
+    }
+
+    return {
+      jobId: job.jobId,
+      exportId: job.exportId,
+      userId: job.userId,
+      jobState: job.jobState.toJSON(),
+      metadata: job.metadata,
+      maxPollingAttempts: job.maxPollingAttempts,
+      pollingIntervalMs: job.pollingIntervalMs,
+      downloadTasks: tasks,
       taskToken: job.taskToken,
     };
   }

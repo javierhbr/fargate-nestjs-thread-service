@@ -18,23 +18,27 @@ export interface JobStateRepositoryPort {
 
   /**
    * Update the job state
+   * Returns the updated entity to prevent stale data usage
    */
-  updateJobState(jobId: string, jobState: JobStateVO): Promise<void>;
+  updateJobState(jobId: string, jobState: JobStateVO): Promise<ExportJobEntity>;
 
   /**
    * Increment completed task counter
+   * Returns the updated entity to prevent stale data usage
    */
-  incrementCompletedTasks(jobId: string): Promise<void>;
+  incrementCompletedTasks(jobId: string): Promise<ExportJobEntity>;
 
   /**
    * Increment failed task counter
+   * Returns the updated entity to prevent stale data usage
    */
-  incrementFailedTasks(jobId: string, errorMessage?: string): Promise<void>;
+  incrementFailedTasks(jobId: string, errorMessage?: string): Promise<ExportJobEntity>;
 
   /**
    * Set the total number of tasks for a job
+   * Returns the updated entity to prevent stale data usage
    */
-  setTotalTasks(jobId: string, totalTasks: number): Promise<void>;
+  setTotalTasks(jobId: string, totalTasks: number): Promise<ExportJobEntity>;
 
   /**
    * Delete a job (cleanup)

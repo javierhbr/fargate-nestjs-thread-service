@@ -38,9 +38,9 @@ export class CompleteJobUseCase implements CompleteJobPort {
       }
 
       // Update task counters
+      // Use the returned entity from repository to prevent stale data
       if (command.success) {
-        await this.jobRepository.incrementCompletedTasks(command.jobId);
-        job = job.incrementCompletedTasks();
+        job = await this.jobRepository.incrementCompletedTasks(command.jobId);
 
         // Publish task completed event
         const taskCompletedEvent = new TaskCompletedEvent({
@@ -58,11 +58,10 @@ export class CompleteJobUseCase implements CompleteJobPort {
           `Task ${command.taskId} completed successfully. Progress: ${job.completedTasks}/${job.totalTasks}`,
         );
       } else {
-        await this.jobRepository.incrementFailedTasks(
+        job = await this.jobRepository.incrementFailedTasks(
           command.jobId,
           command.errorMessage,
         );
-        job = job.incrementFailedTasks(command.errorMessage);
 
         // Publish task failed event
         const taskFailedEvent = new TaskFailedEvent({
@@ -85,11 +84,16 @@ export class CompleteJobUseCase implements CompleteJobPort {
 
       if (isJobComplete) {
         const allTasksSucceeded = job.allTasksSucceeded();
-        const updatedJob = job.transitionToCompleted();
-        await this.jobRepository.updateJobState(command.jobId, updatedJob.jobState);
+        const transitionedJob = job.transitionToCompleted();
+
+        // Use the returned entity from repository to prevent stale data
+        const updatedJob = await this.jobRepository.updateJobState(
+          command.jobId,
+          transitionedJob.jobState,
+        );
 
         this.logger.log(
-          `Job ${command.jobId} completed. Total: ${job.totalTasks}, Completed: ${job.completedTasks}, Failed: ${job.failedTasks}`,
+          `Job ${command.jobId} completed. Total: ${updatedJob.totalTasks}, Completed: ${updatedJob.completedTasks}, Failed: ${updatedJob.failedTasks}`,
         );
 
         // Publish job completed event
@@ -100,9 +104,9 @@ export class CompleteJobUseCase implements CompleteJobPort {
           jobId: command.jobId,
           exportId: updatedJob.exportId,
           userId: updatedJob.userId,
-          totalTasks: job.totalTasks,
-          completedTasks: job.completedTasks,
-          failedTasks: job.failedTasks,
+          totalTasks: updatedJob.totalTasks,
+          completedTasks: updatedJob.completedTasks,
+          failedTasks: updatedJob.failedTasks,
           success: allTasksSucceeded,
           durationMs,
         });

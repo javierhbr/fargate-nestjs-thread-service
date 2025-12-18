@@ -45,34 +45,54 @@ export class DispatchDownloadTasksUseCase implements DispatchDownloadTasksPort {
         throw new Error(`Job ${command.jobId} not found`);
       }
 
-      // Create download tasks
-      const tasks: DownloadTaskEntity[] = command.downloadUrls.map((url, index) => {
-        const taskId = uuidv4();
-        const fileName = this.extractFileNameFromUrl(url, index);
-        const s3OutputKey = `${command.jobId}/${fileName}`;
+      // Create download tasks in batches to prevent event loop blocking
+      // For large numbers of URLs (>1000), this prevents synchronous blocking
+      const BATCH_SIZE = 50;
+      const tasks: DownloadTaskEntity[] = [];
 
-        const fileMetadata = FileMetadataVO.create({
-          fileName,
-          downloadUrl: url,
+      for (let i = 0; i < command.downloadUrls.length; i += BATCH_SIZE) {
+        const batchUrls = command.downloadUrls.slice(i, i + BATCH_SIZE);
+
+        const batchTasks = batchUrls.map((url, idx) => {
+          const actualIndex = i + idx;
+          const taskId = uuidv4();
+          const fileName = this.extractFileNameFromUrl(url, actualIndex);
+          const s3OutputKey = `${command.jobId}/${fileName}`;
+
+          const fileMetadata = FileMetadataVO.create({
+            fileName,
+            downloadUrl: url,
+          });
+
+          return DownloadTaskEntity.create({
+            taskId,
+            jobId: command.jobId,
+            fileMetadata,
+            s3OutputKey,
+          });
         });
 
-        return DownloadTaskEntity.create({
-          taskId,
-          jobId: command.jobId,
-          fileMetadata,
-          s3OutputKey,
-        });
-      });
+        tasks.push(...batchTasks);
+
+        // Yield to event loop between batches
+        if (i + BATCH_SIZE < command.downloadUrls.length) {
+          await new Promise((resolve) => setImmediate(resolve));
+        }
+      }
 
       // Update job with total tasks
+      // Note: The returned entity is not used here as we don't need the updated state
+      // But the signature now returns it to prevent stale data issues in other use cases
       await this.jobRepository.setTotalTasks(command.jobId, tasks.length);
 
-      // Dispatch tasks
+      // Dispatch tasks with periodic yields to prevent blocking
       const dispatchedTasks: TaskDispatchInfo[] = [];
       let tasksToWorkerPool = 0;
       let tasksToOverflowQueue = 0;
 
-      for (const task of tasks) {
+      for (let i = 0; i < tasks.length; i++) {
+        const task = tasks[i];
+
         if (this.workerPool.hasCapacity()) {
           // Send to worker pool
           await this.workerPool.submitTask(task);
@@ -102,6 +122,11 @@ export class DispatchDownloadTasksUseCase implements DispatchDownloadTasksPort {
           dispatchedTo: dispatchedTasks[dispatchedTasks.length - 1].dispatchedTo,
         });
         this.eventPublisher.publishAsync(taskDispatchedEvent);
+
+        // Yield to event loop every 10 tasks during dispatching
+        if (i > 0 && i % 10 === 0) {
+          await new Promise((resolve) => setImmediate(resolve));
+        }
       }
 
       this.logger.log(

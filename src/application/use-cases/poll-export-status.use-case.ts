@@ -56,17 +56,21 @@ export class PollExportStatusUseCase implements PollExportStatusPort {
       // Handle different status scenarios
       if (exportStatus.status.isReady()) {
         // Export is ready, transition job to downloading
-        let updatedJob = job.transitionToDownloading();
+        let transitionedJob = job.transitionToDownloading();
 
         // Set total tasks based on download URLs
         if (exportStatus.downloadUrls && exportStatus.downloadUrls.length > 0) {
-          updatedJob = updatedJob.setTotalTasks(exportStatus.downloadUrls.length);
+          transitionedJob = transitionedJob.setTotalTasks(exportStatus.downloadUrls.length);
           this.logger.debug(
             `Set total tasks to ${exportStatus.downloadUrls.length} for job ${command.jobId}`,
           );
         }
 
-        await this.jobRepository.updateJobState(command.jobId, updatedJob.jobState);
+        // Use the returned entity from repository to prevent stale data
+        const updatedJob = await this.jobRepository.updateJobState(
+          command.jobId,
+          transitionedJob.jobState,
+        );
 
         return {
           job: updatedJob,
@@ -80,14 +84,19 @@ export class PollExportStatusUseCase implements PollExportStatusPort {
         const errorMessage =
           exportStatus.errorMessage ??
           `Export ${exportStatus.status.toString().toLowerCase()}`;
-        const updatedJob = job.transitionToFailed(errorMessage);
-        await this.jobRepository.updateJobState(command.jobId, updatedJob.jobState);
+        const transitionedJob = job.transitionToFailed(errorMessage);
+
+        // Use the returned entity from repository to prevent stale data
+        const updatedJob = await this.jobRepository.updateJobState(
+          command.jobId,
+          transitionedJob.jobState,
+        );
 
         // Publish job failed event
         const jobFailedEvent = new JobFailedEvent({
           jobId: command.jobId,
-          exportId: job.exportId,
-          userId: job.userId,
+          exportId: updatedJob.exportId,
+          userId: updatedJob.userId,
           errorMessage,
           failureReason: exportStatus.status.isFailed()
             ? 'export_failed'
@@ -126,8 +135,10 @@ export class PollExportStatusUseCase implements PollExportStatusPort {
         const job = await this.jobRepository.findById(command.jobId);
         if (job) {
           const errorMessage = error instanceof Error ? error.message : 'Polling failed';
-          const updatedJob = job.transitionToFailed(errorMessage);
-          await this.jobRepository.updateJobState(command.jobId, updatedJob.jobState);
+          const transitionedJob = job.transitionToFailed(errorMessage);
+
+          // Use the returned entity from repository to prevent stale data
+          await this.jobRepository.updateJobState(command.jobId, transitionedJob.jobState);
         }
       } catch (repoError) {
         this.logger.error(`Failed to update job state for ${command.jobId}:`, repoError);

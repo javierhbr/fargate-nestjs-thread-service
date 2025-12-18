@@ -91,11 +91,13 @@ export class JobStateVO {
   }
 
   get createdAt(): Date {
-    return this._createdAt;
+    // Defensive copy to prevent external mutation
+    return new Date(this._createdAt);
   }
 
   get updatedAt(): Date {
-    return this._updatedAt;
+    // Defensive copy to prevent external mutation
+    return new Date(this._updatedAt);
   }
 
   get pendingTasks(): number {
