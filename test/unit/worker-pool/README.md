@@ -53,19 +53,60 @@ npm run test:unit test/unit/worker-pool
 
 ## Why Not Full PoolManager and FileProcessor Tests?
 
-While `TestCase.md` documents 220+ test scenarios, the actual implementation focuses on:
+While `TestCase.md` documents 220+ test scenarios, the actual implementation focuses on infrastructure tests for the following technical reasons:
 
-1. **Infrastructure Tests**: The current test file validates all the testing utilities work correctly
-2. **Complex Mocking Challenges**: Full tests for PoolManagerService and file-processor require:
-   - Complex AWS SDK mocking (@aws-sdk/client-s3, @aws-sdk/lib-storage)
-   - Worker threads mocking (node worker_threads module)
-   - Fetch API mocking with proper stream handling
-   - Dynamic module imports with vi.mock() hoisting issues
+### Technical Challenges
 
-3. **Recommended Approach**: These components are better tested through:
-   - **Integration tests**: Test with actual AWS SDK (already exist in `test/acceptance/`)
-   - **E2E tests**: Test full workflow with real S3 and workers
-   - **Manual testing**: Verify worker pool behavior in development
+1. **Worker Threads Module Complexity**
+   - Node.js `worker_threads` module cannot be easily mocked with Vitest
+   - Worker creation triggers actual thread spawning which hangs tests
+   - The module loads the worker script which has global side effects
+   - Mocking requires intercepting native Node.js APIs
+
+2. **AWS SDK Mocking Complexity**
+   - `@aws-sdk/client-s3` and `@aws-sdk/lib-storage` use complex internal state
+   - S3Client constructor and Upload class require deep SDK knowledge
+   - Stream handling in Upload class is difficult to mock accurately
+   - Multipart upload logic has intricate state machines
+
+3. **Fetch API and Streams**
+   - Modern fetch() returns Web Streams (ReadableStream) not Node Streams
+   - Conversion between Web Streams and Node Streams is complex
+   - Mocking Response.body with proper stream behavior is error-prone
+   - Headers object has specific getter/setter behavior
+
+### Better Testing Approach
+
+Instead of complex unit test mocks, these components are better tested via:
+
+1. **Integration Tests** (`test/acceptance/`)
+   - Test with real LocalStack S3
+   - Use actual worker threads in test environment
+   - Verify real HTTP downloads and uploads
+   - Already implemented in the codebase
+
+2. **Contract Tests**
+   - Test that PoolManager implements expected interface
+   - Verify message protocol contracts
+   - Test worker lifecycle contracts
+   - Validate event emission contracts
+
+3. **Component Tests**
+   - Test PoolManager with stub workers (not real threads)
+   - Test FileProcessor with in-memory S3 adapter
+   - Test worker-thread message handling in isolation
+   - **This is what TestCase.md documents - can be implemented if needed**
+
+### Why Infrastructure Tests Are Valuable
+
+The current `worker-pool-infrastructure.spec.ts` provides value by:
+
+✅ Validating all mock factories work correctly
+✅ Testing blocking operation detection
+✅ Verifying stream mocking utilities
+✅ Ensuring test helpers behave as expected
+✅ Providing examples for future tests
+✅ Catching regressions in test utilities
 
 ## Running the Tests
 

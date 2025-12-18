@@ -1,8 +1,41 @@
+import { produce } from 'immer';
 import { FileMetadataVO } from '../value-objects/file-metadata.vo';
 
 /**
- * Download Task Entity
- * Represents an individual file download within an export job
+ * Download Task Entity - Represents an individual file download within an export job
+ *
+ * Status Transitions:
+ * PENDING → PROCESSING → COMPLETED (success path)
+ * PENDING → PROCESSING → FAILED (error path)
+ * FAILED → PENDING (retry path, only if retryable)
+ *
+ * This uses a hybrid approach:
+ * - Data stored in a plain readonly interface
+ * - Methods available via namespace functions
+ * - Create function returns object with both data and methods for backward compatibility
+ */
+
+/**
+ * Core data structure for DownloadTaskEntity
+ */
+export interface DownloadTaskEntityData {
+  readonly taskId: string;
+  readonly jobId: string;
+  readonly fileMetadata: FileMetadataVO;
+  readonly s3OutputKey: string;
+  readonly retryCount: number;
+  readonly maxRetries: number;
+  readonly status: 'pending' | 'processing' | 'completed' | 'failed';
+  readonly errorMessage?: string;
+  readonly createdAt: Date;
+  readonly startedAt?: Date;
+  readonly completedAt?: Date;
+  readonly s3UploadedKey?: string;
+  readonly uploadedSizeBytes?: number;
+}
+
+/**
+ * Props interface for backward compatibility
  */
 export interface DownloadTaskProps {
   taskId: string;
@@ -16,43 +49,123 @@ export interface DownloadTaskProps {
   createdAt?: Date;
   startedAt?: Date;
   completedAt?: Date;
+  s3UploadedKey?: string;
+  uploadedSizeBytes?: number;
 }
 
-export class DownloadTaskEntity {
-  private readonly _taskId: string;
-  private readonly _jobId: string;
-  private readonly _fileMetadata: FileMetadataVO;
-  private readonly _s3OutputKey: string;
-  private readonly _retryCount: number;
-  private readonly _maxRetries: number;
-  private readonly _status: 'pending' | 'processing' | 'completed' | 'failed';
-  private readonly _errorMessage?: string;
-  private readonly _createdAt: Date;
-  private readonly _startedAt?: Date;
-  private readonly _completedAt?: Date;
+/**
+ * Download Task Entity with methods for backward compatibility
+ */
+export interface DownloadTaskEntity extends DownloadTaskEntityData {
+  // Computed properties
+  readonly processingDuration: number | undefined;
 
-  private static readonly DEFAULT_MAX_RETRIES = 3;
+  // Query methods
+  canRetry(): boolean;
+  shouldRetry(): boolean;
+  isRetryLimitReached(): boolean;
+  isPending(): boolean;
+  isProcessing(): boolean;
+  isCompleted(): boolean;
+  isFailed(): boolean;
 
-  private constructor(props: DownloadTaskProps) {
-    this._taskId = props.taskId;
-    this._jobId = props.jobId;
-    this._fileMetadata = props.fileMetadata;
-    this._s3OutputKey = props.s3OutputKey;
-    this._retryCount = props.retryCount ?? 0;
-    this._maxRetries = props.maxRetries ?? DownloadTaskEntity.DEFAULT_MAX_RETRIES;
-    this._status = props.status ?? 'pending';
-    this._errorMessage = props.errorMessage;
-    this._createdAt = props.createdAt ?? new Date();
-    this._startedAt = props.startedAt;
-    this._completedAt = props.completedAt;
+  // Mutation methods (return new instances)
+  markAsProcessing(): DownloadTaskEntity;
+  markAsCompleted(s3UploadedKey?: string, uploadedSizeBytes?: number): DownloadTaskEntity;
+  markAsFailed(errorMessage: string): DownloadTaskEntity;
+  retry(): DownloadTaskEntity;
+
+  toJSON(): ReturnType<typeof DownloadTaskEntity.toJSON>;
+}
+
+/**
+ * Factory and domain operations for DownloadTaskEntity
+ * All methods are pure functions that return new immutable instances
+ *
+ * ESLint disable: Namespaces are acceptable for this functional pattern
+ */
+// eslint-disable-next-line @typescript-eslint/no-namespace
+export namespace DownloadTaskEntity {
+  const DEFAULT_MAX_RETRIES = 3;
+
+  /**
+   * Props for creating a DownloadTaskEntity
+   */
+  export interface CreateProps {
+    taskId: string;
+    jobId: string;
+    fileMetadata: FileMetadataVO;
+    s3OutputKey: string;
+    retryCount?: number;
+    maxRetries?: number;
+    status?: 'pending' | 'processing' | 'completed' | 'failed';
+    errorMessage?: string;
+    createdAt?: Date;
+    startedAt?: Date;
+    completedAt?: Date;
+    s3UploadedKey?: string;
+    uploadedSizeBytes?: number;
   }
 
-  static create(props: DownloadTaskProps): DownloadTaskEntity {
-    DownloadTaskEntity.validate(props);
-    return new DownloadTaskEntity(props);
+  /**
+   * Create a new DownloadTaskEntity with validation and methods
+   */
+  export function create(props: CreateProps): DownloadTaskEntity {
+    validate(props);
+
+    const data: DownloadTaskEntityData = {
+      taskId: props.taskId,
+      jobId: props.jobId,
+      fileMetadata: props.fileMetadata,
+      s3OutputKey: props.s3OutputKey,
+      retryCount: props.retryCount ?? 0,
+      maxRetries: props.maxRetries ?? DEFAULT_MAX_RETRIES,
+      status: props.status ?? 'pending',
+      errorMessage: props.errorMessage,
+      createdAt: props.createdAt ?? new Date(),
+      startedAt: props.startedAt,
+      completedAt: props.completedAt,
+      s3UploadedKey: props.s3UploadedKey,
+      uploadedSizeBytes: props.uploadedSizeBytes,
+    };
+
+    return attachMethods(data);
   }
 
-  private static validate(props: DownloadTaskProps): void {
+  /**
+   * Attach methods to entity data for backward compatibility
+   * This creates an object that looks like the old class but uses Immer internally
+   */
+  function attachMethods(data: DownloadTaskEntityData): DownloadTaskEntity {
+    return {
+      ...data,
+
+      // Computed properties
+      get processingDuration() {
+        return getProcessingDuration(data);
+      },
+
+      // Query methods
+      canRetry: () => canRetry(data),
+      shouldRetry: () => shouldRetry(data),
+      isRetryLimitReached: () => isRetryLimitReached(data),
+      isPending: () => isPending(data),
+      isProcessing: () => isProcessing(data),
+      isCompleted: () => isCompleted(data),
+      isFailed: () => isFailed(data),
+
+      // Mutation methods
+      markAsProcessing: () => markAsProcessing(data),
+      markAsCompleted: (s3UploadedKey?: string, uploadedSizeBytes?: number) =>
+        markAsCompleted(data, s3UploadedKey, uploadedSizeBytes),
+      markAsFailed: (errorMessage: string) => markAsFailed(data, errorMessage),
+      retry: () => retry(data),
+
+      toJSON: () => toJSON(data),
+    };
+  }
+
+  function validate(props: Partial<CreateProps>): void {
     if (!props.taskId || props.taskId.trim().length === 0) {
       throw new Error('Task ID is required');
     }
@@ -73,163 +186,126 @@ export class DownloadTaskEntity {
     }
   }
 
-  get taskId(): string {
-    return this._taskId;
+  // ===== Pure Functions for Computed Properties =====
+
+  export function getProcessingDuration(task: DownloadTaskEntityData): number | undefined {
+    if (!task.startedAt) return undefined;
+    const endTime = task.completedAt ?? new Date();
+    return endTime.getTime() - task.startedAt.getTime();
   }
 
-  get jobId(): string {
-    return this._jobId;
+  // ===== Pure Functions for Query Logic =====
+
+  export function canRetry(task: DownloadTaskEntityData): boolean {
+    return task.status === 'failed' && task.retryCount < task.maxRetries;
   }
 
-  get fileMetadata(): FileMetadataVO {
-    return this._fileMetadata;
+  export function shouldRetry(task: DownloadTaskEntityData): boolean {
+    return canRetry(task) && !isRetryLimitReached(task);
   }
 
-  get s3OutputKey(): string {
-    return this._s3OutputKey;
+  export function isRetryLimitReached(task: DownloadTaskEntityData): boolean {
+    return task.retryCount >= task.maxRetries;
   }
 
-  get retryCount(): number {
-    return this._retryCount;
+  export function isPending(task: DownloadTaskEntityData): boolean {
+    return task.status === 'pending';
   }
 
-  get maxRetries(): number {
-    return this._maxRetries;
+  export function isProcessing(task: DownloadTaskEntityData): boolean {
+    return task.status === 'processing';
   }
 
-  get status(): 'pending' | 'processing' | 'completed' | 'failed' {
-    return this._status;
+  export function isCompleted(task: DownloadTaskEntityData): boolean {
+    return task.status === 'completed';
   }
 
-  get errorMessage(): string | undefined {
-    return this._errorMessage;
+  export function isFailed(task: DownloadTaskEntityData): boolean {
+    return task.status === 'failed';
   }
 
-  get createdAt(): Date {
-    return this._createdAt;
-  }
+  // ===== State Mutations (Return new instances via Immer) =====
 
-  get startedAt(): Date | undefined {
-    return this._startedAt;
-  }
-
-  get completedAt(): Date | undefined {
-    return this._completedAt;
-  }
-
-  get processingDuration(): number | undefined {
-    if (!this._startedAt) return undefined;
-    const endTime = this._completedAt ?? new Date();
-    return endTime.getTime() - this._startedAt.getTime();
-  }
-
-  canRetry(): boolean {
-    return this._status === 'failed' && this._retryCount < this._maxRetries;
-  }
-
-  shouldRetry(): boolean {
-    return this.canRetry() && !this.isRetryLimitReached();
-  }
-
-  isRetryLimitReached(): boolean {
-    return this._retryCount >= this._maxRetries;
-  }
-
-  isPending(): boolean {
-    return this._status === 'pending';
-  }
-
-  isProcessing(): boolean {
-    return this._status === 'processing';
-  }
-
-  isCompleted(): boolean {
-    return this._status === 'completed';
-  }
-
-  isFailed(): boolean {
-    return this._status === 'failed';
-  }
-
-  markAsProcessing(): DownloadTaskEntity {
-    if (this._status === 'completed') {
+  export function markAsProcessing(task: DownloadTaskEntityData): DownloadTaskEntity {
+    if (task.status === 'completed') {
       throw new Error('Cannot start processing a completed task');
     }
 
-    return DownloadTaskEntity.create({
-      ...this.toProps(),
-      status: 'processing',
-      startedAt: this._startedAt ?? new Date(),
+    const updated = produce(task, (draft) => {
+      draft.status = 'processing';
+      draft.startedAt = draft.startedAt ?? new Date();
     });
+    return attachMethods(updated);
   }
 
-  markAsCompleted(): DownloadTaskEntity {
-    if (this._status !== 'processing') {
+  export function markAsCompleted(
+    task: DownloadTaskEntityData,
+    s3UploadedKey?: string,
+    uploadedSizeBytes?: number,
+  ): DownloadTaskEntity {
+    if (task.status !== 'processing') {
       throw new Error('Can only complete a task that is currently processing');
     }
 
-    return DownloadTaskEntity.create({
-      ...this.toProps(),
-      status: 'completed',
-      completedAt: new Date(),
-      errorMessage: undefined,
+    const updated = produce(task, (draft) => {
+      draft.status = 'completed';
+      draft.completedAt = new Date();
+      draft.errorMessage = undefined;
+      if (s3UploadedKey !== undefined) {
+        draft.s3UploadedKey = s3UploadedKey;
+      }
+      if (uploadedSizeBytes !== undefined) {
+        draft.uploadedSizeBytes = uploadedSizeBytes;
+      }
     });
+    return attachMethods(updated);
   }
 
-  markAsFailed(errorMessage: string): DownloadTaskEntity {
-    return DownloadTaskEntity.create({
-      ...this.toProps(),
-      status: 'failed',
-      errorMessage,
-      completedAt: new Date(),
+  export function markAsFailed(
+    task: DownloadTaskEntityData,
+    errorMessage: string,
+  ): DownloadTaskEntity {
+    const updated = produce(task, (draft) => {
+      draft.status = 'failed';
+      draft.errorMessage = errorMessage;
+      draft.completedAt = new Date();
     });
+    return attachMethods(updated);
   }
 
-  retry(): DownloadTaskEntity {
-    if (!this.canRetry()) {
+  export function retry(task: DownloadTaskEntityData): DownloadTaskEntity {
+    if (!canRetry(task)) {
       throw new Error('Task cannot be retried');
     }
 
-    return DownloadTaskEntity.create({
-      ...this.toProps(),
-      status: 'pending',
-      retryCount: this._retryCount + 1,
-      errorMessage: undefined,
-      startedAt: undefined,
-      completedAt: undefined,
+    const updated = produce(task, (draft) => {
+      draft.status = 'pending';
+      draft.retryCount = draft.retryCount + 1;
+      draft.errorMessage = undefined;
+      draft.startedAt = undefined;
+      draft.completedAt = undefined;
     });
+    return attachMethods(updated);
   }
 
-  private toProps(): DownloadTaskProps {
-    return {
-      taskId: this._taskId,
-      jobId: this._jobId,
-      fileMetadata: this._fileMetadata,
-      s3OutputKey: this._s3OutputKey,
-      retryCount: this._retryCount,
-      maxRetries: this._maxRetries,
-      status: this._status,
-      errorMessage: this._errorMessage,
-      createdAt: this._createdAt,
-      startedAt: this._startedAt,
-      completedAt: this._completedAt,
-    };
-  }
+  // ===== Serialization =====
 
-  toJSON() {
+  export function toJSON(task: DownloadTaskEntityData) {
     return {
-      taskId: this._taskId,
-      jobId: this._jobId,
-      fileMetadata: this._fileMetadata.toJSON(),
-      s3OutputKey: this._s3OutputKey,
-      retryCount: this._retryCount,
-      maxRetries: this._maxRetries,
-      status: this._status,
-      errorMessage: this._errorMessage,
-      processingDuration: this.processingDuration,
-      createdAt: this._createdAt.toISOString(),
-      startedAt: this._startedAt?.toISOString(),
-      completedAt: this._completedAt?.toISOString(),
+      taskId: task.taskId,
+      jobId: task.jobId,
+      fileMetadata: task.fileMetadata.toJSON(),
+      s3OutputKey: task.s3OutputKey,
+      retryCount: task.retryCount,
+      maxRetries: task.maxRetries,
+      status: task.status,
+      errorMessage: task.errorMessage,
+      processingDuration: getProcessingDuration(task),
+      createdAt: task.createdAt.toISOString(),
+      startedAt: task.startedAt?.toISOString(),
+      completedAt: task.completedAt?.toISOString(),
+      s3UploadedKey: task.s3UploadedKey,
+      uploadedSizeBytes: task.uploadedSizeBytes,
     };
   }
 }
