@@ -23,10 +23,12 @@
     "test:unit:ui": "vitest --ui",
     "test:atdd": "TS_NODE_PROJECT=tsconfig.cucumber.json cucumber-js --config cucumber.config.js",
     "test:atdd:watch": "TS_NODE_PROJECT=tsconfig.cucumber.json cucumber-js --config cucumber.config.js --watch",
-    "clinic:doctor": "clinic doctor --on-port 'autocannon -c 10 -d 30 localhost:3000/health' -- node dist/main.js",
-    "clinic:bubble": "clinic bubbleprof --on-port 'autocannon -c 10 -d 30 localhost:3000/health' -- node dist/main.js",
-    "clinic:flame": "clinic flame --on-port 'autocannon -c 10 -d 30 localhost:3000/health' -- node dist/main.js",
-    "clinic:heap": "clinic heapprofiler --on-port 'autocannon -c 10 -d 30 localhost:3000/health' -- node dist/main.js"
+    "clinic:doctor": "clinic doctor -- node dist/main.js",
+    "clinic:bubble": "clinic bubbleprof -- node dist/main.js",
+    "clinic:flame": "clinic flame -- node dist/main.js",
+    "clinic:heap": "clinic heapprofiler -- node dist/main.js",
+    "clinic:load": "node scripts/clinic-load-test.js",
+    "clinic:monitor": "node scripts/monitor-queue.js"
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.490.0",

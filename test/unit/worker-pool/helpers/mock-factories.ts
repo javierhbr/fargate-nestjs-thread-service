@@ -61,7 +61,7 @@ export function createMockUpload() {
   });
 
   upload.abort = vi.fn().mockResolvedValue(undefined);
-  upload.on = vi.fn((event: string, handler: Function) => {
+  upload.on = vi.fn((event: string, handler: (...args: any[]) => void) => {
     upload.addEventListener(event, handler);
     return upload;
   });

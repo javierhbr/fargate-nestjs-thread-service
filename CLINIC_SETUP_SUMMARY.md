@@ -1,21 +1,23 @@
 # Clinic.js Setup Summary
 
-Clinic.js has been successfully configured to detect blocking operations in the worker thread pool.
+Clinic.js has been successfully configured to detect blocking operations in the SQS-based microservice and worker thread pool.
 
 ## What Was Installed
 
 ### Dependencies
 - **clinic** (v13.0.0) - Performance profiling suite
-- **autocannon** (v8.0.0) - HTTP load testing tool
+- **autocannon** (v8.0.0) - HTTP load testing tool (legacy, no longer used)
 
 ### NPM Scripts Added
 
 ```json
 {
-  "clinic:doctor": "clinic doctor --on-port 'autocannon -c 10 -d 30 localhost:3000/health' -- node dist/main.js",
-  "clinic:bubble": "clinic bubbleprof --on-port 'autocannon -c 10 -d 30 localhost:3000/health' -- node dist/main.js",
-  "clinic:flame": "clinic flame --on-port 'autocannon -c 10 -d 30 localhost:3000/health' -- node dist/main.js",
-  "clinic:heap": "clinic heapprofiler --on-port 'autocannon -c 10 -d 30 localhost:3000/health' -- node dist/main.js"
+  "clinic:doctor": "clinic doctor -- node dist/main.js",
+  "clinic:bubble": "clinic bubbleprof -- node dist/main.js",
+  "clinic:flame": "clinic flame -- node dist/main.js",
+  "clinic:heap": "clinic heapprofiler -- node dist/main.js",
+  "clinic:load": "node scripts/clinic-load-test.js",
+  "clinic:monitor": "node scripts/monitor-queue.js"
 }
 ```
 
@@ -27,77 +29,106 @@ Clinic.js has been successfully configured to detect blocking operations in the 
    - Triggers worker thread processing
    - Configurable message count
 
-2. **`PERFORMANCE_TESTING.md`**
+2. **`scripts/clinic-profile.sh`**
+   - Automated profiling wrapper script
+   - Combines profiler startup, load testing, and reporting
+   - Single command for complete profiling workflow
+
+3. **`scripts/monitor-queue.js`**
+   - Real-time SQS queue monitoring
+   - Displays queue depth, in-flight messages, processing rate
+   - Color-coded metrics for quick status assessment
+
+4. **`PERFORMANCE_TESTING.md`**
    - Comprehensive performance testing guide
    - How to use each Clinic.js tool
    - Interpreting results and reports
    - Common issues and solutions
    - Advanced testing scenarios
 
-3. **`scripts/README.md`**
+5. **`scripts/README.md`**
    - Quick reference for scripts
    - Usage examples
    - Environment variables
 
-4. **`.gitignore` updates**
+6. **`.gitignore` updates**
    - Ignores Clinic.js output files
    - Prevents committing profiling reports
 
 ## Quick Start Guide
 
-### 1. Simple Health Check Test
+### Architecture Note
 
-Tests event loop blocking during HTTP requests:
+This application is now a **SQS-based microservice** (not an HTTP server). It consumes messages from SQS queues and processes them using worker threads. Profiling requires:
+
+1. Starting the profiler with the app
+2. Sending test messages to SQS queues
+3. Stopping the profiler to generate reports
+
+### Option 1: Automated Profiling (Recommended)
+
+Use the wrapper script for one-command profiling:
 
 ```bash
 # Build the application
 npm run build
 
-# Run Clinic Doctor
-npm run clinic:doctor
+# Run profiling with 100 test messages
+./scripts/clinic-profile.sh doctor 100
+
+# Other tools
+./scripts/clinic-profile.sh bubble 50
+./scripts/clinic-profile.sh flame 200
+./scripts/clinic-profile.sh heap 100
 ```
 
-This automatically:
-- Starts the application with profiling
-- Sends 10 concurrent requests for 30 seconds
-- Generates HTML report
-- Opens report in browser
+The script automatically:
+- Starts the profiler
+- Waits for app initialization
+- Sends test messages
+- Waits for processing
+- Stops profiler and generates report
 
-### 2. Worker Thread Load Test
+### Option 2: Manual Two-Terminal Workflow
 
-Tests worker pool under realistic load:
+For more control over timing:
 
 ```bash
-# Terminal 1: Start with profiling
+# Terminal 1: Start profiling
 npm run build
-clinic doctor -- node dist/main.js
+npm run clinic:doctor
 
-# Wait for: "Export Processing Service started on port 3000"
+# Wait ~5 seconds for app initialization
+# Look for: "Export Processing Microservice started - listening to SQS queues"
 
-# Terminal 2: Send 50 test messages
-node scripts/clinic-load-test.js 50
+# Terminal 2: Send test messages
+npm run clinic:load 100
+
+# Terminal 3 (Optional): Monitor queue in real-time
+npm run clinic:monitor
 
 # Terminal 1: After processing completes, press Ctrl+C
 # Report will automatically open
 ```
 
-### 3. Memory Leak Detection
+### Option 3: Queue Monitoring During Profiling
 
-Tests for memory leaks over extended period:
+Monitor SQS queues in real-time:
 
 ```bash
-# Terminal 1: Start heap profiler
-npm run build
-clinic heapprofiler -- node dist/main.js
+# Terminal 1: Start profiler
+npm run clinic:doctor
 
-# Terminal 2: Send sustained load
-for i in {1..10}; do
-  node scripts/clinic-load-test.js 50
-  sleep 30
-done
+# Terminal 2: Start queue monitor
+npm run clinic:monitor
 
-# Terminal 1: Press Ctrl+C after 5+ minutes
-# Report will show memory allocation patterns
+# Terminal 3: Send load
+npm run clinic:load 100
+
+# Watch Terminal 2 for real-time metrics:
+# - Queue depth
+# - In-flight messages
+# - Processing rate
 ```
 
 ## What Each Tool Does
@@ -108,7 +139,7 @@ done
 **When to use:**
 - Suspect main thread is blocked
 - Application feels sluggish
-- Request latency is high
+- Message processing is slow
 
 **What to look for:**
 - 🟢 Green zones = Healthy (< 10ms delays)
@@ -119,7 +150,7 @@ done
 - Synchronous file operations
 - Heavy JSON parsing
 - Crypto operations in main thread
-- Database queries without async/await
+- SQS message processing blocking the event loop
 
 ### Clinic Bubbleprof 🫧
 **Purpose:** Analyze async operations
@@ -167,15 +198,19 @@ done
 **Expected Result:** Green graph throughout test
 
 ```bash
+# Automated
+./scripts/clinic-profile.sh doctor 100
+
+# Or manual
 clinic doctor -- node dist/main.js
-# In another terminal:
-node scripts/clinic-load-test.js 100
+# Wait for startup, then:
+npm run clinic:load 100
 ```
 
 If red zones appear:
 1. Check main thread is using async/await
 2. Verify no synchronous file operations
-3. Ensure message parsing is async
+3. Ensure SQS message parsing is async
 4. Move heavy computation to workers
 
 ### Scenario 2: Verify Worker Pool Scalability
@@ -184,12 +219,12 @@ If red zones appear:
 
 ```bash
 # Test 1: 2 workers
-WORKER_POOL_SIZE=2 clinic doctor -- node dist/main.js
-# Send 50 messages, note throughput
+WORKER_POOL_SIZE=2 ./scripts/clinic-profile.sh doctor 50
 
 # Test 2: 8 workers
-WORKER_POOL_SIZE=8 clinic doctor -- node dist/main.js
-# Send 50 messages, compare throughput
+WORKER_POOL_SIZE=8 ./scripts/clinic-profile.sh doctor 50
+
+# Compare processing time and throughput
 ```
 
 Throughput should scale linearly with CPU cores (up to I/O limits).
@@ -199,15 +234,36 @@ Throughput should scale linearly with CPU cores (up to I/O limits).
 **Expected Result:** No event loop blocking even under stress
 
 ```bash
-WORKER_POOL_SIZE=4 MAX_CONCURRENT_JOBS=20 clinic doctor -- node dist/main.js
-# In another terminal:
-node scripts/clinic-load-test.js 500
+WORKER_POOL_SIZE=4 MAX_CONCURRENT_JOBS=20 ./scripts/clinic-profile.sh doctor 500
 ```
 
-Monitor:
+Monitor (in separate terminal):
+```bash
+npm run clinic:monitor
+```
+
+Watch for:
 - Event loop delays (should stay green)
-- Queue depth (check health endpoint)
+- Queue depth (should drain steadily)
 - Worker restart rate (should be 0)
+
+### Scenario 4: Memory Leak Detection
+
+**Expected Result:** Sawtooth memory pattern
+
+```bash
+# Terminal 1: Start heap profiler
+clinic heapprofiler -- node dist/main.js
+
+# Terminal 2: Send sustained load
+for i in {1..10}; do
+  npm run clinic:load 50
+  sleep 30
+done
+
+# Terminal 1: Press Ctrl+C after 5+ minutes
+# Report will show memory allocation patterns
+```
 
 ## Interpreting Results
 
@@ -265,10 +321,10 @@ Solution: Optimize hot path, use better algorithm
 1. **Baseline Performance:**
    ```bash
    # Run all four tools with typical load
-   npm run clinic:doctor
-   npm run clinic:bubble
-   npm run clinic:flame
-   npm run clinic:heap
+   ./scripts/clinic-profile.sh doctor 100
+   ./scripts/clinic-profile.sh bubble 100
+   ./scripts/clinic-profile.sh flame 100
+   ./scripts/clinic-profile.sh heap 100
    ```
 
 2. **Save Reports:**
@@ -289,7 +345,7 @@ Solution: Optimize hot path, use better algorithm
 ## Troubleshooting
 
 ### "No data collected"
-**Solution:** Ensure application starts and autocannon runs successfully
+**Solution:** Ensure application starts successfully; check logs for errors
 
 ### "ECONNREFUSED" in load test
 **Solution:** Verify LocalStack is running (`docker-compose ps`)
@@ -300,16 +356,32 @@ Solution: Optimize hot path, use better algorithm
 ### Reports won't open
 **Solution:** Check HTML files in current directory, open manually in browser
 
+### Queue metrics not showing
+**Solution:** Verify SQS queue URLs in environment variables
+
+## Environment Variables
+
+Required for profiling with LocalStack:
+
+```bash
+export AWS_ENDPOINT=http://localhost:4566
+export SQS_EXPORT_JOBS_URL=http://sqs.us-east-1.localhost.localstack.cloud:4566/000000000000/export-jobs
+export AWS_REGION=us-east-1
+export AWS_ACCESS_KEY_ID=test
+export AWS_SECRET_ACCESS_KEY=test
+```
+
 ## Resources
 
 - Full Guide: [PERFORMANCE_TESTING.md](PERFORMANCE_TESTING.md)
 - Script Reference: [scripts/README.md](scripts/README.md)
 - Clinic.js Docs: https://clinicjs.org/
 - Worker Threads: https://nodejs.org/api/worker_threads.html
+- @ssut/nestjs-sqs: https://github.com/ssut/nestjs-sqs
 
 ## Success Criteria
 
-Your worker thread pool is performing well if:
+Your SQS microservice and worker thread pool are performing well if:
 
 ✅ Clinic Doctor shows all green zones
 ✅ Event loop delays stay under 10ms
@@ -319,7 +391,9 @@ Your worker thread pool is performing well if:
 ✅ CPU utilization is 60-90% under load
 ✅ No blocking operations in main thread
 ✅ Worker crashes are handled gracefully
+✅ SQS queue drains at steady rate
+✅ No message backlog during normal load
 
 ---
 
-**Ready to test?** Run: `npm run clinic:doctor`
+**Ready to test?** Run: `./scripts/clinic-profile.sh doctor 100`
