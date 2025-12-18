@@ -1,3 +1,4 @@
+import { produce } from 'immer';
 import { DownloadTaskEntity } from './download-task.entity';
 import { JobStateVO } from '../value-objects/job-state.vo';
 import { JobStatusVO } from '../value-objects/job-status.vo';
@@ -6,53 +7,181 @@ import { ExportStatusVO } from '../value-objects/export-status.vo';
 /**
  * Export Job Entity - Aggregate Root
  * Represents a user's request to export data with associated download tasks
+ *
+ * This uses a hybrid approach:
+ * - Data stored in a plain readonly interface
+ * - Methods available via namespace functions
+ * - Create function returns object with both data and methods for backward compatibility
  */
-export interface ExportJobProps {
-  jobId: string;
-  exportId: string;
-  userId: string;
-  jobState: JobStateVO;
-  metadata?: Record<string, unknown>;
-  maxPollingAttempts?: number;
-  pollingIntervalMs?: number;
-  downloadTasks?: DownloadTaskEntity[];
-  taskToken?: string;
+
+/**
+ * Core data structure for ExportJobEntity
+ */
+export interface ExportJobEntityData {
+  readonly jobId: string;
+  readonly exportId: string;
+  readonly userId: string;
+  readonly jobState: JobStateVO;
+  readonly metadata: Readonly<Record<string, unknown>>;
+  readonly maxPollingAttempts: number;
+  readonly pollingIntervalMs: number;
+  readonly downloadTasks: ReadonlyArray<DownloadTaskEntity>;
+  readonly taskToken?: string;
 }
 
-export class ExportJobEntity {
-  private readonly _jobId: string;
-  private readonly _exportId: string;
-  private readonly _userId: string;
-  private readonly _jobState: JobStateVO;
-  private readonly _metadata: Record<string, unknown>;
-  private readonly _maxPollingAttempts: number;
-  private readonly _pollingIntervalMs: number;
-  private readonly _downloadTasks: DownloadTaskEntity[];
-  private readonly _taskToken?: string;
+/**
+ * Export Job Entity with methods for backward compatibility
+ */
+export interface ExportJobEntity extends ExportJobEntityData {
+  // Computed properties
+  readonly status: JobStatusVO;
+  readonly totalTasks: number;
+  readonly completedTasks: number;
+  readonly failedTasks: number;
+  readonly pendingTasks: number;
+  readonly progressPercentage: number;
 
-  private static readonly DEFAULT_MAX_POLLING_ATTEMPTS = 120; // 10 minutes at 5s intervals
-  private static readonly DEFAULT_POLLING_INTERVAL_MS = 5000; // 5 seconds
+  // Query methods
+  hasTaskToken(): boolean;
+  isComplete(): boolean;
+  hasFailures(): boolean;
+  allTasksSucceeded(): boolean;
+  canStartPolling(): boolean;
+  shouldStartDownloading(exportStatus: ExportStatusVO): boolean;
+  needsPolling(exportStatus: ExportStatusVO): boolean;
 
-  private constructor(props: ExportJobProps) {
-    this._jobId = props.jobId;
-    this._exportId = props.exportId;
-    this._userId = props.userId;
-    this._jobState = props.jobState;
-    this._metadata = props.metadata ?? {};
-    this._maxPollingAttempts =
-      props.maxPollingAttempts ?? ExportJobEntity.DEFAULT_MAX_POLLING_ATTEMPTS;
-    this._pollingIntervalMs =
-      props.pollingIntervalMs ?? ExportJobEntity.DEFAULT_POLLING_INTERVAL_MS;
-    this._downloadTasks = props.downloadTasks ?? [];
-    this._taskToken = props.taskToken;
+  // Mutation methods (return new instances)
+  withJobState(newJobState: JobStateVO): ExportJobEntity;
+  transitionToPolling(): ExportJobEntity;
+  transitionToDownloading(): ExportJobEntity;
+  transitionToCompleted(): ExportJobEntity;
+  transitionToFailed(errorMessage: string): ExportJobEntity;
+  incrementCompletedTasks(): ExportJobEntity;
+  incrementFailedTasks(errorMessage?: string): ExportJobEntity;
+  setTotalTasks(totalTasks: number): ExportJobEntity;
+
+  // Download task methods
+  addDownloadTask(task: DownloadTaskEntity): ExportJobEntity;
+  addDownloadTasks(tasks: DownloadTaskEntity[]): ExportJobEntity;
+  updateDownloadTask(updatedTask: DownloadTaskEntity): ExportJobEntity;
+  getPendingDownloadTasks(): DownloadTaskEntity[];
+  getFailedDownloadTasks(): DownloadTaskEntity[];
+  getRetryableDownloadTasks(): DownloadTaskEntity[];
+
+  toJSON(): ReturnType<typeof ExportJobEntity.toJSON>;
+}
+
+/**
+ * Factory and domain operations for ExportJobEntity
+ * All methods are pure functions that return new immutable instances
+ *
+ * ESLint disable: Namespaces are acceptable for this functional pattern
+ */
+// eslint-disable-next-line @typescript-eslint/no-namespace
+export namespace ExportJobEntity {
+  const DEFAULT_MAX_POLLING_ATTEMPTS = 120; // 10 minutes at 5s intervals
+  const DEFAULT_POLLING_INTERVAL_MS = 5000; // 5 seconds
+
+  /**
+   * Props for creating an ExportJobEntity
+   */
+  export interface CreateProps {
+    jobId: string;
+    exportId: string;
+    userId: string;
+    jobState: JobStateVO;
+    metadata?: Record<string, unknown>;
+    maxPollingAttempts?: number;
+    pollingIntervalMs?: number;
+    downloadTasks?: DownloadTaskEntity[];
+    taskToken?: string;
   }
 
-  static create(props: ExportJobProps): ExportJobEntity {
-    ExportJobEntity.validate(props);
-    return new ExportJobEntity(props);
+  /**
+   * Create a new ExportJobEntity with validation and methods
+   */
+  export function create(props: CreateProps): ExportJobEntity {
+    validate(props);
+
+    const data: ExportJobEntityData = {
+      jobId: props.jobId,
+      exportId: props.exportId,
+      userId: props.userId,
+      jobState: props.jobState,
+      metadata: props.metadata ?? {},
+      maxPollingAttempts: props.maxPollingAttempts ?? DEFAULT_MAX_POLLING_ATTEMPTS,
+      pollingIntervalMs: props.pollingIntervalMs ?? DEFAULT_POLLING_INTERVAL_MS,
+      downloadTasks: props.downloadTasks ?? [],
+      taskToken: props.taskToken,
+    };
+
+    return attachMethods(data);
   }
 
-  private static validate(props: ExportJobProps): void {
+  /**
+   * Attach methods to entity data for backward compatibility
+   * This creates an object that looks like the old class but uses Immer internally
+   */
+  function attachMethods(data: ExportJobEntityData): ExportJobEntity {
+    return {
+      ...data,
+
+      // Computed properties
+      get status() {
+        return data.jobState.status;
+      },
+      get totalTasks() {
+        return data.jobState.totalTasks;
+      },
+      get completedTasks() {
+        return data.jobState.completedTasks;
+      },
+      get failedTasks() {
+        return data.jobState.failedTasks;
+      },
+      get pendingTasks() {
+        return data.jobState.pendingTasks;
+      },
+      get progressPercentage() {
+        return data.jobState.progressPercentage;
+      },
+
+      // Query methods
+      hasTaskToken: () => hasTaskToken(data),
+      isComplete: () => isComplete(data),
+      hasFailures: () => hasFailures(data),
+      allTasksSucceeded: () => allTasksSucceeded(data),
+      canStartPolling: () => canStartPolling(data),
+      shouldStartDownloading: (exportStatus: ExportStatusVO) =>
+        shouldStartDownloading(data, exportStatus),
+      needsPolling: (exportStatus: ExportStatusVO) => needsPolling(data, exportStatus),
+
+      // Mutation methods
+      withJobState: (newJobState: JobStateVO) => withJobState(data, newJobState),
+      transitionToPolling: () => transitionToPolling(data),
+      transitionToDownloading: () => transitionToDownloading(data),
+      transitionToCompleted: () => transitionToCompleted(data),
+      transitionToFailed: (errorMessage: string) =>
+        transitionToFailed(data, errorMessage),
+      incrementCompletedTasks: () => incrementCompletedTasks(data),
+      incrementFailedTasks: (errorMessage?: string) =>
+        incrementFailedTasks(data, errorMessage),
+      setTotalTasks: (totalTasksCount: number) => setTotalTasks(data, totalTasksCount),
+
+      // Download task methods
+      addDownloadTask: (task: DownloadTaskEntity) => addDownloadTask(data, task),
+      addDownloadTasks: (tasks: DownloadTaskEntity[]) => addDownloadTasks(data, tasks),
+      updateDownloadTask: (updatedTask: DownloadTaskEntity) =>
+        updateDownloadTask(data, updatedTask),
+      getPendingDownloadTasks: () => getPendingDownloadTasks(data),
+      getFailedDownloadTasks: () => getFailedDownloadTasks(data),
+      getRetryableDownloadTasks: () => getRetryableDownloadTasks(data),
+
+      toJSON: () => toJSON(data),
+    };
+  }
+
+  function validate(props: Partial<CreateProps>): void {
     if (!props.jobId || props.jobId.trim().length === 0) {
       throw new Error('Job ID is required');
     }
@@ -73,217 +202,196 @@ export class ExportJobEntity {
     }
   }
 
-  get jobId(): string {
-    return this._jobId;
+  // ===== Pure Functions for Domain Logic =====
+
+  export function hasTaskToken(job: ExportJobEntityData): boolean {
+    return job.taskToken !== undefined && job.taskToken.length > 0;
   }
 
-  get exportId(): string {
-    return this._exportId;
+  export function isComplete(job: ExportJobEntityData): boolean {
+    return job.jobState.isComplete();
   }
 
-  get userId(): string {
-    return this._userId;
+  export function hasFailures(job: ExportJobEntityData): boolean {
+    return job.jobState.hasFailures();
   }
 
-  get jobState(): JobStateVO {
-    return this._jobState;
+  export function allTasksSucceeded(job: ExportJobEntityData): boolean {
+    return job.jobState.allTasksSucceeded();
   }
 
-  get status(): JobStatusVO {
-    return this._jobState.status;
+  export function canStartPolling(job: ExportJobEntityData): boolean {
+    return (
+      job.jobState.status.isPending() ||
+      job.jobState.status.equals(JobStatusVO.processing())
+    );
   }
 
-  get metadata(): Record<string, unknown> {
-    return { ...this._metadata };
+  export function shouldStartDownloading(
+    job: ExportJobEntityData,
+    exportStatus: ExportStatusVO,
+  ): boolean {
+    return exportStatus.isReady() && !isComplete(job);
   }
 
-  get maxPollingAttempts(): number {
-    return this._maxPollingAttempts;
+  export function needsPolling(
+    job: ExportJobEntityData,
+    exportStatus: ExportStatusVO,
+  ): boolean {
+    return exportStatus.isPending() && !isComplete(job);
   }
 
-  get pollingIntervalMs(): number {
-    return this._pollingIntervalMs;
-  }
+  // ===== State Mutations (Return new instances via Immer) =====
 
-  get downloadTasks(): ReadonlyArray<DownloadTaskEntity> {
-    return this._downloadTasks;
-  }
-
-  get taskToken(): string | undefined {
-    return this._taskToken;
-  }
-
-  hasTaskToken(): boolean {
-    return this._taskToken !== undefined && this._taskToken.length > 0;
-  }
-
-  get totalTasks(): number {
-    return this._jobState.totalTasks;
-  }
-
-  get completedTasks(): number {
-    return this._jobState.completedTasks;
-  }
-
-  get failedTasks(): number {
-    return this._jobState.failedTasks;
-  }
-
-  get pendingTasks(): number {
-    return this._jobState.pendingTasks;
-  }
-
-  get progressPercentage(): number {
-    return this._jobState.progressPercentage;
-  }
-
-  isComplete(): boolean {
-    return this._jobState.isComplete();
-  }
-
-  hasFailures(): boolean {
-    return this._jobState.hasFailures();
-  }
-
-  allTasksSucceeded(): boolean {
-    return this._jobState.allTasksSucceeded();
-  }
-
-  canStartPolling(): boolean {
-    return this.status.isPending() || this.status.equals(JobStatusVO.processing());
-  }
-
-  shouldStartDownloading(exportStatus: ExportStatusVO): boolean {
-    return exportStatus.isReady() && !this.isComplete();
-  }
-
-  needsPolling(exportStatus: ExportStatusVO): boolean {
-    return exportStatus.isPending() && !this.isComplete();
-  }
-
-  withJobState(newJobState: JobStateVO): ExportJobEntity {
-    return ExportJobEntity.create({
-      ...this.toProps(),
-      jobState: newJobState,
+  export function withJobState(
+    job: ExportJobEntityData,
+    newJobState: JobStateVO,
+  ): ExportJobEntity {
+    const updated = produce(job, (draft) => {
+      draft.jobState = newJobState;
     });
+    return attachMethods(updated);
   }
 
-  transitionToPolling(): ExportJobEntity {
-    const newJobState = this._jobState.withStatus(JobStatusVO.polling());
-    return this.withJobState(newJobState);
+  export function transitionToPolling(job: ExportJobEntityData): ExportJobEntity {
+    const updated = produce(job, (draft) => {
+      draft.jobState = draft.jobState.withStatus(JobStatusVO.polling());
+    });
+    return attachMethods(updated);
   }
 
-  transitionToDownloading(): ExportJobEntity {
-    const newJobState = this._jobState.withStatus(JobStatusVO.downloading());
-    return this.withJobState(newJobState);
+  export function transitionToDownloading(job: ExportJobEntityData): ExportJobEntity {
+    const updated = produce(job, (draft) => {
+      draft.jobState = draft.jobState.withStatus(JobStatusVO.downloading());
+    });
+    return attachMethods(updated);
   }
 
-  transitionToCompleted(): ExportJobEntity {
-    if (!this.isComplete()) {
+  export function transitionToCompleted(job: ExportJobEntityData): ExportJobEntity {
+    if (!isComplete(job)) {
       throw new Error('Cannot mark job as completed when tasks are still pending');
     }
 
-    const newJobState = this._jobState.withStatus(JobStatusVO.completed());
-    return this.withJobState(newJobState);
+    const updated = produce(job, (draft) => {
+      draft.jobState = draft.jobState.withStatus(JobStatusVO.completed());
+    });
+    return attachMethods(updated);
   }
 
-  transitionToFailed(errorMessage: string): ExportJobEntity {
-    const newJobState = this._jobState.withStatus(JobStatusVO.failed(), errorMessage);
-    return this.withJobState(newJobState);
+  export function transitionToFailed(
+    job: ExportJobEntityData,
+    errorMessage: string,
+  ): ExportJobEntity {
+    const updated = produce(job, (draft) => {
+      draft.jobState = draft.jobState.withStatus(JobStatusVO.failed(), errorMessage);
+    });
+    return attachMethods(updated);
   }
 
-  incrementCompletedTasks(): ExportJobEntity {
-    const newJobState = this._jobState.withIncrementedCompleted();
-    return this.withJobState(newJobState);
+  export function incrementCompletedTasks(job: ExportJobEntityData): ExportJobEntity {
+    const updated = produce(job, (draft) => {
+      draft.jobState = draft.jobState.withIncrementedCompleted();
+    });
+    return attachMethods(updated);
   }
 
-  incrementFailedTasks(errorMessage?: string): ExportJobEntity {
-    const newJobState = this._jobState.withIncrementedFailed(errorMessage);
-    return this.withJobState(newJobState);
+  export function incrementFailedTasks(
+    job: ExportJobEntityData,
+    errorMessage?: string,
+  ): ExportJobEntity {
+    const updated = produce(job, (draft) => {
+      draft.jobState = draft.jobState.withIncrementedFailed(errorMessage);
+    });
+    return attachMethods(updated);
   }
 
-  setTotalTasks(totalTasks: number): ExportJobEntity {
-    const newJobState = this._jobState.withTotalTasks(totalTasks);
-    return this.withJobState(newJobState);
+  export function setTotalTasks(
+    job: ExportJobEntityData,
+    totalTasksCount: number,
+  ): ExportJobEntity {
+    const updated = produce(job, (draft) => {
+      draft.jobState = draft.jobState.withTotalTasks(totalTasksCount);
+    });
+    return attachMethods(updated);
   }
 
-  addDownloadTask(task: DownloadTaskEntity): ExportJobEntity {
-    if (task.jobId !== this._jobId) {
+  // ===== Download Task Management =====
+
+  export function addDownloadTask(
+    job: ExportJobEntityData,
+    task: DownloadTaskEntity,
+  ): ExportJobEntity {
+    if (task.jobId !== job.jobId) {
       throw new Error('Download task belongs to a different job');
     }
 
-    return ExportJobEntity.create({
-      ...this.toProps(),
-      downloadTasks: [...this._downloadTasks, task],
+    const updated = produce(job, (draft) => {
+      (draft.downloadTasks as DownloadTaskEntity[]).push(task);
     });
+    return attachMethods(updated);
   }
 
-  addDownloadTasks(tasks: DownloadTaskEntity[]): ExportJobEntity {
-    const invalidTasks = tasks.filter((task) => task.jobId !== this._jobId);
+  export function addDownloadTasks(
+    job: ExportJobEntityData,
+    tasks: DownloadTaskEntity[],
+  ): ExportJobEntity {
+    const invalidTasks = tasks.filter((task) => task.jobId !== job.jobId);
     if (invalidTasks.length > 0) {
       throw new Error(`${invalidTasks.length} tasks belong to different jobs`);
     }
 
-    return ExportJobEntity.create({
-      ...this.toProps(),
-      downloadTasks: [...this._downloadTasks, ...tasks],
+    const updated = produce(job, (draft) => {
+      (draft.downloadTasks as DownloadTaskEntity[]).push(...tasks);
     });
+    return attachMethods(updated);
   }
 
-  updateDownloadTask(updatedTask: DownloadTaskEntity): ExportJobEntity {
-    const taskIndex = this._downloadTasks.findIndex(
+  export function updateDownloadTask(
+    job: ExportJobEntityData,
+    updatedTask: DownloadTaskEntity,
+  ): ExportJobEntity {
+    const taskIndex = job.downloadTasks.findIndex(
       (task) => task.taskId === updatedTask.taskId,
     );
     if (taskIndex === -1) {
       throw new Error(`Task ${updatedTask.taskId} not found in job`);
     }
 
-    const updatedTasks = [...this._downloadTasks];
-    updatedTasks[taskIndex] = updatedTask;
-
-    return ExportJobEntity.create({
-      ...this.toProps(),
-      downloadTasks: updatedTasks,
+    const updated = produce(job, (draft) => {
+      (draft.downloadTasks as DownloadTaskEntity[])[taskIndex] = updatedTask;
     });
+    return attachMethods(updated);
   }
 
-  getPendingDownloadTasks(): DownloadTaskEntity[] {
-    return this._downloadTasks.filter((task) => task.isPending());
+  export function getPendingDownloadTasks(
+    job: ExportJobEntityData,
+  ): DownloadTaskEntity[] {
+    return job.downloadTasks.filter((task) => task.isPending());
   }
 
-  getFailedDownloadTasks(): DownloadTaskEntity[] {
-    return this._downloadTasks.filter((task) => task.isFailed());
+  export function getFailedDownloadTasks(job: ExportJobEntityData): DownloadTaskEntity[] {
+    return job.downloadTasks.filter((task) => task.isFailed());
   }
 
-  getRetryableDownloadTasks(): DownloadTaskEntity[] {
-    return this._downloadTasks.filter((task) => task.shouldRetry());
+  export function getRetryableDownloadTasks(
+    job: ExportJobEntityData,
+  ): DownloadTaskEntity[] {
+    return job.downloadTasks.filter((task) => task.shouldRetry());
   }
 
-  private toProps(): ExportJobProps {
+  // ===== Serialization =====
+
+  export function toJSON(job: ExportJobEntityData) {
     return {
-      jobId: this._jobId,
-      exportId: this._exportId,
-      userId: this._userId,
-      jobState: this._jobState,
-      metadata: this._metadata,
-      maxPollingAttempts: this._maxPollingAttempts,
-      pollingIntervalMs: this._pollingIntervalMs,
-      downloadTasks: this._downloadTasks,
-      taskToken: this._taskToken,
-    };
-  }
-
-  toJSON() {
-    return {
-      jobId: this._jobId,
-      exportId: this._exportId,
-      userId: this._userId,
-      jobState: this._jobState.toJSON(),
-      metadata: this._metadata,
-      maxPollingAttempts: this._maxPollingAttempts,
-      pollingIntervalMs: this._pollingIntervalMs,
-      downloadTasks: this._downloadTasks.map((task) => task.toJSON()),
-      taskToken: this._taskToken,
+      jobId: job.jobId,
+      exportId: job.exportId,
+      userId: job.userId,
+      jobState: job.jobState.toJSON(),
+      metadata: job.metadata,
+      maxPollingAttempts: job.maxPollingAttempts,
+      pollingIntervalMs: job.pollingIntervalMs,
+      downloadTasks: job.downloadTasks.map((task) => task.toJSON()),
+      taskToken: job.taskToken,
     };
   }
 }
