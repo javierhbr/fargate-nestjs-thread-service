@@ -26,18 +26,16 @@ export class S3FileStorageAdapter implements FileStoragePort {
   ): Promise<UploadResult> {
     this.logger.debug(`Uploading stream to S3: ${bucket}/${key}`);
 
-    const result = await this.s3Service.uploadStream(bucket, key, stream, {
+    const result = await this.s3Service.uploadStream(key, stream, {
       contentType: options?.contentType,
       metadata: options?.metadata,
-      serverSideEncryption: options?.serverSideEncryption,
-      storageClass: options?.storageClass,
     });
 
     return {
       key,
       bucket,
-      etag: result.ETag ?? '',
-      versionId: result.VersionId,
+      etag: result.etag,
+      versionId: undefined,
       location: `s3://${bucket}/${key}`,
     };
   }
@@ -52,18 +50,16 @@ export class S3FileStorageAdapter implements FileStoragePort {
       `Uploading buffer to S3: ${bucket}/${key} (${buffer.length} bytes)`,
     );
 
-    const result = await this.s3Service.uploadBuffer(bucket, key, buffer, {
+    const result = await this.s3Service.uploadBuffer(key, buffer, {
       contentType: options?.contentType,
       metadata: options?.metadata,
-      serverSideEncryption: options?.serverSideEncryption,
-      storageClass: options?.storageClass,
     });
 
     return {
       key,
       bucket,
-      etag: result.ETag ?? '',
-      versionId: result.VersionId,
+      etag: result.etag,
+      versionId: undefined,
       location: `s3://${bucket}/${key}`,
     };
   }
@@ -76,18 +72,16 @@ export class S3FileStorageAdapter implements FileStoragePort {
   ): Promise<UploadResult> {
     this.logger.debug(`Uploading file to S3: ${bucket}/${key} from ${filePath}`);
 
-    const result = await this.s3Service.uploadFile(bucket, key, filePath, {
+    const result = await this.s3Service.uploadFile(key, filePath, {
       contentType: options?.contentType,
       metadata: options?.metadata,
-      serverSideEncryption: options?.serverSideEncryption,
-      storageClass: options?.storageClass,
     });
 
     return {
       key,
       bucket,
-      etag: result.ETag ?? '',
-      versionId: result.VersionId,
+      etag: result.etag,
+      versionId: undefined,
       location: `s3://${bucket}/${key}`,
     };
   }
@@ -95,7 +89,7 @@ export class S3FileStorageAdapter implements FileStoragePort {
   async downloadStream(bucket: string, key: string): Promise<DownloadResult> {
     this.logger.debug(`Downloading stream from S3: ${bucket}/${key}`);
 
-    const result = await this.s3Service.downloadStream(bucket, key);
+    const result = await this.s3Service.downloadStream(key);
 
     return {
       stream: result.Body as Readable,
@@ -113,13 +107,13 @@ export class S3FileStorageAdapter implements FileStoragePort {
   ): Promise<void> {
     this.logger.debug(`Downloading file from S3: ${bucket}/${key} to ${destinationPath}`);
 
-    await this.s3Service.downloadFile(bucket, key, destinationPath);
+    await this.s3Service.downloadFile(key, destinationPath);
   }
 
   async fileExists(bucket: string, key: string): Promise<boolean> {
     try {
-      await this.s3Service.headObject(bucket, key);
-      return true;
+      const result = await this.s3Service.headObject(key);
+      return result !== null;
     } catch (error) {
       const err = error as { name?: string; $metadata?: { httpStatusCode?: number } };
       if (err.name === 'NotFound' || err.$metadata?.httpStatusCode === 404) {
@@ -132,31 +126,35 @@ export class S3FileStorageAdapter implements FileStoragePort {
   async deleteFile(bucket: string, key: string): Promise<void> {
     this.logger.debug(`Deleting file from S3: ${bucket}/${key}`);
 
-    await this.s3Service.deleteObject(bucket, key);
+    await this.s3Service.deleteObject(key);
   }
 
   async deleteFiles(bucket: string, keys: string[]): Promise<void> {
     this.logger.debug(`Deleting ${keys.length} files from S3: ${bucket}`);
 
-    await this.s3Service.deleteObjects(bucket, keys);
+    await this.s3Service.deleteObjects(keys);
   }
 
   async getPresignedUrl(bucket: string, key: string, expiresIn: number): Promise<string> {
     this.logger.debug(`Generating presigned URL for S3: ${bucket}/${key}`);
 
-    return this.s3Service.getPresignedUrl(bucket, key, expiresIn);
+    return this.s3Service.getPresignedUrl(key, expiresIn);
   }
 
   async getFileMetadata(
     bucket: string,
     key: string,
   ): Promise<{ contentLength: number; contentType?: string; etag?: string }> {
-    const result = await this.s3Service.headObject(bucket, key);
+    const result = await this.s3Service.headObject(key);
+
+    if (!result) {
+      throw new Error(`File not found: ${bucket}/${key}`);
+    }
 
     return {
-      contentLength: result.ContentLength ?? 0,
-      contentType: result.ContentType,
-      etag: result.ETag,
+      contentLength: result.size,
+      contentType: result.contentType,
+      etag: result.etag,
     };
   }
 }

@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { HttpModule } from '../shared/http/http.module';
 
 // Use Cases
 import {
@@ -18,7 +19,7 @@ import {
  * The implementations (adapters) are provided by the InfrastructureModule.
  */
 @Module({
-  imports: [ConfigModule],
+  imports: [ConfigModule, HttpModule],
   providers: [
     // Use Cases
     StartExportJobUseCase,
