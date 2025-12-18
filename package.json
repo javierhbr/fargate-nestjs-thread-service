@@ -28,7 +28,9 @@
     "clinic:flame": "clinic flame -- node dist/main.js",
     "clinic:heap": "clinic heapprofiler -- node dist/main.js",
     "clinic:load": "node scripts/clinic-load-test.js",
-    "clinic:monitor": "node scripts/monitor-queue.js"
+    "clinic:monitor": "node scripts/monitor-queue.js",
+    "0x": "0x -- node dist/src/main.js",
+    "mock-api": "node scripts/mock-export-api.js"
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.490.0",
@@ -70,6 +72,7 @@
     "@typescript-eslint/parser": "^6.18.1",
     "@vitest/coverage-v8": "^4.0.16",
     "@vitest/ui": "^4.0.16",
+    "0x": "^6.0.0",
     "autocannon": "^8.0.0",
     "chai": "^4.5.0",
     "clinic": "^13.0.0",

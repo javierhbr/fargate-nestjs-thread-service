@@ -42,6 +42,11 @@ coverage/
 *.clinic-heapprofiler
 *.clinic-heapprofiler.html
 
+# 0x profiling output
+*.0x/
+profile-*/
+isolate-*.log
+
 # Terraform
 *.tfstate
 *.tfstate.*
@@ -54,3 +59,4 @@ tmp/
 temp/
 # Cucumber Reports
 test/reports/
+.clinic-jobs.json

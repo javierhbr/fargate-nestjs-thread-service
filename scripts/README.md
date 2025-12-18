@@ -17,32 +17,104 @@ Automated profiling wrapper that combines Clinic.js profiling with SQS load test
 ./scripts/clinic-profile.sh flame 200   # CPU profiling
 ./scripts/clinic-profile.sh heap 100    # Memory profiling
 
+# With clean data (clears DynamoDB + SQS first)
+CLEAR_DATA=true ./scripts/clinic-profile.sh doctor 100
+
 # With environment variables
 WORKER_POOL_SIZE=8 ./scripts/clinic-profile.sh doctor 500
+
+# Skip DynamoDB setup (if already populated)
+SKIP_DYNAMODB_SETUP=true ./scripts/clinic-profile.sh doctor 100
+
+# Clean baseline (clear + setup fresh data)
+CLEAR_DATA=true ./scripts/clinic-profile.sh doctor 100
 ```
 
 **What it does:**
-1. Starts the specified Clinic.js profiler (doctor, bubble, flame, heap)
-2. Waits for microservice initialization (configurable delay)
-3. Sends specified number of test messages to SQS
-4. Waits for message processing to complete
-5. Stops profiler and generates HTML report
-6. Opens report in browser automatically
+
+0. **(Optional)** Clears all existing data if `CLEAR_DATA=true` (DynamoDB + SQS queues)
+1. Pre-populates DynamoDB with test job records (unless `SKIP_DYNAMODB_SETUP=true`)
+2. Starts the specified Clinic.js profiler (doctor, bubble, flame, heap)
+3. Waits for microservice initialization (configurable delay)
+4. Sends specified number of test messages to SQS
+5. Waits for message processing to complete
+6. Stops profiler and generates HTML report
+7. Opens report in browser automatically
 
 **Parameters:**
 - `$1` - Tool name: `doctor`, `bubble`, `flame`, or `heap` (required)
 - `$2` - Message count (default: 100)
 
 **Environment variables:**
+- `CLEAR_DATA` - Clear all data before profiling (default: false). **Use for clean baseline runs**
+- `SKIP_DYNAMODB_SETUP` - Skip DynamoDB pre-population (default: false). **Use for CPU/memory iterations**
+- `WORKER_POOL_SIZE` - Number of worker threads (default: 4)
 - `STARTUP_WAIT` - Seconds to wait for app startup (default: 5)
 - `PROCESSING_WAIT` - Seconds to wait after sending messages (default: 10)
-- All environment variables from `clinic-load-test.js`
 
 **Use cases:**
 - Quick one-command profiling workflow
 - Automated performance regression testing
 - CI/CD integration
 - Consistent profiling methodology
+
+#### `clinic-setup-dynamodb.js`
+
+Pre-populates DynamoDB with test job records to prevent conditional check failures during profiling.
+
+**Usage:**
+
+```bash
+# Setup for 100 jobs (default)
+node scripts/clinic-setup-dynamodb.js 100
+
+# Setup for custom number
+node scripts/clinic-setup-dynamodb.js 500
+
+# Run standalone before manual profiling
+node scripts/clinic-setup-dynamodb.js 100
+npm run clinic:doctor
+```
+
+**What it does:**
+
+1. Generates realistic job records with UUIDs, statuses, and task data
+2. Writes jobs to DynamoDB in batches (25 per batch)
+3. Creates jobs in PENDING status that the application can update
+4. Saves job IDs to `.clinic-jobs.json` for reference
+5. Verifies table existence before writing
+
+**Job structure:**
+
+```javascript
+{
+  jobId: '<uuid>',
+  exportId: '<uuid>',
+  userId: 'test-user-<N>',
+  status: 'PENDING',
+  tasks: [{ taskId, url, format, outputKey, status }],
+  retryCount: 0,
+  version: 1,
+  createdAt: '<iso-date>',
+  updatedAt: '<iso-date>'
+}
+```
+
+**Use cases:**
+
+- Clean profiling without DynamoDB errors
+- Pre-populating test data before load testing
+- Ensuring database records exist for SQS messages
+- Testing optimistic locking and conditional updates
+
+**Environment variables:**
+- `AWS_ENDPOINT` - LocalStack endpoint (default: http://localhost:4566)
+- `DYNAMODB_TABLE_NAME` - Table name (default: export-job-state)
+- `AWS_REGION` - AWS region (default: us-east-1)
+- `AWS_ACCESS_KEY_ID` - AWS credentials (default: test)
+- `AWS_SECRET_ACCESS_KEY` - AWS credentials (default: test)
+
+**Note:** This script is automatically run by `clinic-profile.sh` unless `SKIP_DYNAMODB_SETUP=true` is set.
 
 #### `clinic-load-test.js`
 Load testing script that sends test messages to SQS to trigger worker thread processing.
