@@ -6,15 +6,14 @@ import { SqsModule } from '../shared/aws/sqs/sqs.module';
 import { S3Module } from '../shared/aws/s3/s3.module';
 import { DynamoDbModule } from '../shared/aws/dynamodb/dynamodb.module';
 import { StepFunctionsModule } from '../shared/aws/step-functions/step-functions.module';
-import { HttpClientModule } from '../shared/http/http-client.module';
 import { LoggingModule } from '../shared/logging/logging.module';
 
-// Port tokens (for dependency injection)
-import { JobStateRepositoryPort } from '../application/ports/output/job-state-repository.port';
-import { MessageQueuePort } from '../application/ports/output/message-queue.port';
-import { FileStoragePort } from '../application/ports/output/file-storage.port';
-import { EventPublisherPort } from '../application/ports/output/event-publisher.port';
-import { StepFunctionsPort } from '../application/ports/output/step-functions.port';
+// Injection tokens (string symbols for DI)
+export const JOB_STATE_REPOSITORY_PORT = 'JobStateRepositoryPort';
+export const MESSAGE_QUEUE_PORT = 'MessageQueuePort';
+export const FILE_STORAGE_PORT = 'FileStoragePort';
+export const EVENT_PUBLISHER_PORT = 'EventPublisherPort';
+export const STEP_FUNCTIONS_PORT = 'StepFunctionsPort';
 
 // Adapters (implementations)
 import { DynamoDbJobRepositoryAdapter } from './adapters/persistence/dynamodb-job-repository.adapter';
@@ -40,41 +39,40 @@ import { StepFunctionsAdapter } from './adapters/step-functions/step-functions.a
     S3Module,
     DynamoDbModule,
     StepFunctionsModule,
-    HttpClientModule,
   ],
   providers: [
     // Persistence adapters
     DynamoDbJobRepositoryAdapter,
     {
-      provide: JobStateRepositoryPort,
+      provide: JOB_STATE_REPOSITORY_PORT,
       useClass: DynamoDbJobRepositoryAdapter,
     },
 
     // Messaging adapters
     SqsMessageQueueAdapter,
     {
-      provide: MessageQueuePort,
+      provide: MESSAGE_QUEUE_PORT,
       useClass: SqsMessageQueueAdapter,
     },
 
     // Storage adapters
     S3FileStorageAdapter,
     {
-      provide: FileStoragePort,
+      provide: FILE_STORAGE_PORT,
       useClass: S3FileStorageAdapter,
     },
 
     // Event publisher adapter
     ConsoleEventPublisherAdapter,
     {
-      provide: EventPublisherPort,
+      provide: EVENT_PUBLISHER_PORT,
       useClass: ConsoleEventPublisherAdapter,
     },
 
     // Step Functions adapter
     StepFunctionsAdapter,
     {
-      provide: StepFunctionsPort,
+      provide: STEP_FUNCTIONS_PORT,
       useClass: StepFunctionsAdapter,
     },
 
@@ -84,11 +82,11 @@ import { StepFunctionsAdapter } from './adapters/step-functions/step-functions.a
   ],
   exports: [
     // Export port tokens so they can be injected
-    JobStateRepositoryPort,
-    MessageQueuePort,
-    FileStoragePort,
-    EventPublisherPort,
-    StepFunctionsPort,
+    JOB_STATE_REPOSITORY_PORT,
+    MESSAGE_QUEUE_PORT,
+    FILE_STORAGE_PORT,
+    EVENT_PUBLISHER_PORT,
+    STEP_FUNCTIONS_PORT,
   ],
 })
 export class InfrastructureModule {}

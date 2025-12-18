@@ -1,8 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { AppConfig } from '../../config/configuration';
-import { SqsService, SqsConsumerBase } from '../../shared/aws/sqs';
-import { SqsMessageEnvelope } from '../../shared/aws/sqs/sqs-consumer.base';
+import { SqsMessageHandler } from '@ssut/nestjs-sqs';
+import { Message } from '@aws-sdk/client-sqs';
 import { DynamoDbService, JobState } from '../../shared/aws/dynamodb/dynamodb.service';
 import { PinoLoggerService } from '../../shared/logging/pino-logger.service';
 import {
@@ -15,34 +13,42 @@ import { TaskDispatcherService } from '../services/task-dispatcher.service';
 import { validateExportJobMessage } from '../dto/export-job.dto';
 import { ExportApiStatus } from '../interfaces/export-api-response.interface';
 
+/**
+ * Export Job Consumer
+ * Listens to export-jobs-queue for new export job requests
+ * Uses @ssut/nestjs-sqs for message consumption
+ */
 @Injectable()
-export class ExportJobConsumer extends SqsConsumerBase<ExportJobMessage> {
+export class ExportJobConsumer {
   constructor(
-    sqsService: SqsService,
-    logger: PinoLoggerService,
-    private readonly configService: ConfigService<AppConfig>,
+    private readonly logger: PinoLoggerService,
     private readonly dynamoDb: DynamoDbService,
     private readonly exportApi: ExportApiService,
     private readonly pollingService: PollingService,
     private readonly taskDispatcher: TaskDispatcherService,
   ) {
-    const sqsConfig = configService.get('sqs', { infer: true })!;
-
-    super(sqsService, logger, {
-      queueUrl: sqsConfig.exportJobsUrl,
-      batchSize: sqsConfig.maxMessages,
-    });
-
     this.logger.setContext(ExportJobConsumer.name);
   }
 
-  protected async processMessage(
-    envelope: SqsMessageEnvelope<ExportJobMessage>,
-  ): Promise<void> {
-    const { body, messageId } = envelope;
+  @SqsMessageHandler('export-jobs-queue', false)
+  async handleMessage(message: Message): Promise<void> {
+    const messageId = message.MessageId || 'unknown';
+
+    // Parse message body
+    let body: ExportJobMessage;
+    try {
+      body = JSON.parse(message.Body || '{}');
+    } catch (error) {
+      this.logger.error(
+        { messageId, error: (error as Error).message },
+        'Failed to parse message body',
+      );
+      // Return without throwing to delete invalid message
+      return;
+    }
 
     // Validate message
-    let validatedMessage;
+    let validatedMessage: ExportJobMessage;
     try {
       validatedMessage = validateExportJobMessage(body);
     } catch (error) {
@@ -50,14 +56,15 @@ export class ExportJobConsumer extends SqsConsumerBase<ExportJobMessage> {
         { messageId, error: (error as Error).message },
         'Invalid export job message',
       );
-      return; // Delete invalid message
+      // Return without throwing to delete invalid message
+      return;
     }
 
     const { jobId, exportId, userId, metadata, taskToken } = validatedMessage;
     const jobLogger = this.logger.withJobId(jobId);
 
     jobLogger.info(
-      { exportId, userId, hasTaskToken: !!taskToken },
+      { exportId, userId, hasTaskToken: !!taskToken, messageId },
       'Processing export job',
     );
 
@@ -129,42 +136,22 @@ export class ExportJobConsumer extends SqsConsumerBase<ExportJobMessage> {
       jobLogger.error({ error: (error as Error).message }, 'Error processing export job');
 
       // Update job state to failed
-      await this.dynamoDb.updateJobStatus(jobId, ExportJobStatus.FAILED, {
-        error: {
-          code: 'PROCESSING_ERROR',
-          message: (error as Error).message,
-        },
-      });
+      try {
+        await this.dynamoDb.updateJobStatus(jobId, ExportJobStatus.FAILED, {
+          error: {
+            code: 'PROCESSING_ERROR',
+            message: (error as Error).message,
+          },
+        });
+      } catch (updateError) {
+        jobLogger.error(
+          { error: (updateError as Error).message },
+          'Failed to update job status to failed',
+        );
+      }
 
-      throw error; // Re-throw to trigger retry via SQS
-    }
-  }
-
-  protected async handleProcessingError(
-    envelope: SqsMessageEnvelope<ExportJobMessage>,
-    error: Error,
-  ): Promise<void> {
-    const maxRetries = 3;
-
-    if (envelope.approximateReceiveCount >= maxRetries) {
-      this.logger.error(
-        {
-          messageId: envelope.messageId,
-          jobId: envelope.body?.jobId,
-          receiveCount: envelope.approximateReceiveCount,
-        },
-        'Max retries exceeded, message will go to DLQ',
-      );
-    } else {
-      this.logger.warn(
-        {
-          messageId: envelope.messageId,
-          jobId: envelope.body?.jobId,
-          receiveCount: envelope.approximateReceiveCount,
-          error: error.message,
-        },
-        'Message processing failed, will retry',
-      );
+      // Re-throw to trigger SQS retry (message will not be deleted)
+      throw error;
     }
   }
 }

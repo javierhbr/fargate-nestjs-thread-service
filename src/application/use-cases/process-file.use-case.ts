@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { createHash } from 'crypto';
-import { Transform, pipeline } from 'stream';
+import { Transform } from 'stream';
 import { Readable } from 'stream';
 import {
   ProcessFileCommand,

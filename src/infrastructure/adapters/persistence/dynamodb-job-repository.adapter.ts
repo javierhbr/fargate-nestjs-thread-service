@@ -4,6 +4,7 @@ import { ExportJobEntity } from '../../../domain/entities/export-job.entity';
 import { JobStateVO } from '../../../domain/value-objects/job-state.vo';
 import { JobStatusVO } from '../../../domain/value-objects/job-status.vo';
 import { DynamoDbService, JobState } from '../../../shared/aws/dynamodb/dynamodb.service';
+import { ExportJobStatus } from '../../../shared/interfaces/export-job.interface';
 
 /**
  * DynamoDB Job Repository Adapter
@@ -176,18 +177,18 @@ export class DynamoDbJobRepositoryAdapter implements JobStateRepositoryPort {
   /**
    * Map domain status to database status (existing enum in codebase)
    */
-  private mapDomainStatusToDbStatus(domainStatus: string): string {
+  private mapDomainStatusToDbStatus(domainStatus: string): ExportJobStatus {
     // Map domain status values to existing database enum values
-    const statusMap: Record<string, string> = {
-      PENDING: 'PENDING',
-      PROCESSING: 'PROCESSING',
-      POLLING: 'POLLING',
-      DOWNLOADING: 'DOWNLOADING',
-      COMPLETED: 'COMPLETED',
-      FAILED: 'FAILED',
+    const statusMap: Record<string, ExportJobStatus> = {
+      PENDING: ExportJobStatus.PENDING,
+      PROCESSING: ExportJobStatus.PROCESSING,
+      POLLING: ExportJobStatus.POLLING,
+      DOWNLOADING: ExportJobStatus.DOWNLOADING,
+      COMPLETED: ExportJobStatus.COMPLETED,
+      FAILED: ExportJobStatus.FAILED,
     };
 
-    return statusMap[domainStatus.toUpperCase()] ?? 'PENDING';
+    return statusMap[domainStatus.toUpperCase()] ?? ExportJobStatus.PENDING;
   }
 
   /**

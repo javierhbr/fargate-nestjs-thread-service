@@ -65,10 +65,10 @@ export class InMemoryFileStorageAdapter implements FileStoragePort {
   }
 
   async uploadFile(
-    bucket: string,
-    key: string,
-    filePath: string,
-    options?: UploadFileOptions,
+    _bucket: string,
+    _key: string,
+    _filePath: string,
+    _options?: UploadFileOptions,
   ): Promise<UploadResult> {
     // In tests, we don't actually read from filesystem
     // This is a mock implementation
@@ -96,9 +96,9 @@ export class InMemoryFileStorageAdapter implements FileStoragePort {
   }
 
   async downloadFile(
-    bucket: string,
-    key: string,
-    destinationPath: string,
+    _bucket: string,
+    _key: string,
+    _destinationPath: string,
   ): Promise<void> {
     // In tests, we don't actually write to filesystem
     // This is a mock implementation

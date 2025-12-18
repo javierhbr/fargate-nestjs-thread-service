@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { DynamoDbJobRepositoryAdapter } from '../../../src/infrastructure/adapters/persistence/dynamodb-job-repository.adapter';
 import { ExportJobEntity } from '../../../src/domain/entities/export-job.entity';
 import { JobStateVO } from '../../../src/domain/value-objects/job-state.vo';

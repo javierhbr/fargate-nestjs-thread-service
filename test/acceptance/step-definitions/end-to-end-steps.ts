@@ -1,8 +1,6 @@
 import { Given, When, Then, DataTable } from '@cucumber/cucumber';
 import { expect } from 'chai';
 import { ExportJobWorld } from '../support/world';
-import { Test } from '@nestjs/testing';
-import { PollExportStatusPort } from '../../../src/application/ports/input/poll-export-status.port';
 import { PollExportStatusUseCase } from '../../../src/application/use-cases/poll-export-status.use-case';
 import { InMemoryJobRepositoryAdapter } from '../../in-memory-adapters/in-memory-job-repository.adapter';
 import { InMemoryExportApiAdapter } from '../../in-memory-adapters/in-memory-export-api.adapter';

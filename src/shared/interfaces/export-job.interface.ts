@@ -22,4 +22,5 @@ export interface ExportJobMessage {
   userId: string;
   callbackUrl?: string;
   metadata?: Record<string, unknown>;
+  taskToken?: string;
 }

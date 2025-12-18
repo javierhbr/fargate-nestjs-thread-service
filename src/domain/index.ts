@@ -6,9 +6,10 @@
  */
 
 // Entities
-export { ExportJobEntity, type ExportJobProps } from './entities/export-job.entity';
+export { ExportJobEntity, type ExportJobEntityData } from './entities/export-job.entity';
 export {
   DownloadTaskEntity,
+  type DownloadTaskEntityData,
   type DownloadTaskProps,
 } from './entities/download-task.entity';
 

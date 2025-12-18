@@ -1,7 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import {
   WorkerPoolPort,
-  ProcessTaskResult,
   WorkerPoolStats,
 } from '../../src/application/ports/output/worker-pool.port';
 import { DownloadTaskEntity } from '../../src/domain/entities/download-task.entity';
@@ -131,7 +130,7 @@ export class InMemoryWorkerPoolAdapter implements WorkerPoolPort {
     this.maxWorkers = 10;
   }
 
-  private async processTask(task: DownloadTaskEntity): Promise<void> {
+  private async processTask(_task: DownloadTaskEntity): Promise<void> {
     this.activeWorkers++;
 
     try {

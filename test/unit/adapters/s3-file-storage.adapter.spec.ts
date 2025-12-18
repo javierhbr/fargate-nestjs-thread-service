@@ -1,11 +1,10 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { S3FileStorageAdapter } from '../../../src/infrastructure/adapters/storage/s3-file-storage.adapter';
 import {
   createMockS3Service,
   createMockLogger,
   createMockReadableStream,
   createBlockingDetector,
-  TEST_FIXTURES,
 } from '../helpers/mock-factories';
 import { Readable } from 'stream';
 

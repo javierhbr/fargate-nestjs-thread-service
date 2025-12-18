@@ -1,14 +1,11 @@
 import { Given, When, Then, DataTable } from '@cucumber/cucumber';
-import { Test } from '@nestjs/testing';
 import { expect } from 'chai';
 import { ExportJobWorld } from '../support/world';
-import { StartExportJobPort } from '../../../src/application/ports/input/start-export-job.port';
 import { StartExportJobUseCase } from '../../../src/application/use-cases/start-export-job.use-case';
 import { InMemoryJobRepositoryAdapter } from '../../in-memory-adapters/in-memory-job-repository.adapter';
 import { InMemoryExportApiAdapter } from '../../in-memory-adapters/in-memory-export-api.adapter';
 import { InMemoryEventPublisherAdapter } from '../../in-memory-adapters/in-memory-event-publisher.adapter';
 import { ExportStatusVO } from '../../../src/domain/value-objects/export-status.vo';
-import { JobStatusVO } from '../../../src/domain/value-objects/job-status.vo';
 
 // Shared adapter instances for step definitions
 let jobRepository: InMemoryJobRepositoryAdapter;
@@ -51,7 +48,7 @@ Given(
 
 Given(
   'the export will become READY after {int} polls',
-  function (this: ExportJobWorld, pollCount: number) {
+  function (this: ExportJobWorld, _pollCount: number) {
     // This will be configured when we know the exportId from the previous step
     // We'll configure it in the When step
     this.context.exportApiResponses.set('pollsToReady', {

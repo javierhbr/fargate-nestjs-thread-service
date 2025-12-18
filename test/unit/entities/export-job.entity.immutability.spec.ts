@@ -3,7 +3,6 @@ import { ExportJobEntity } from '../../../src/domain/entities/export-job.entity'
 import { DownloadTaskEntity } from '../../../src/domain/entities/download-task.entity';
 import { JobStateVO } from '../../../src/domain/value-objects/job-state.vo';
 import { JobStatusVO } from '../../../src/domain/value-objects/job-status.vo';
-import { ExportStatusVO } from '../../../src/domain/value-objects/export-status.vo';
 import { FileMetadataVO } from '../../../src/domain/value-objects/file-metadata.vo';
 import { createBlockingDetector } from '../helpers/mock-factories';
 

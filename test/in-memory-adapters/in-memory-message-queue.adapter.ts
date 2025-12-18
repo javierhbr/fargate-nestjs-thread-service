@@ -69,7 +69,7 @@ export class InMemoryMessageQueueAdapter implements MessageQueuePort {
   async receiveMessages<T>(
     queueUrl: string,
     maxMessages: number = 1,
-    waitTimeSeconds: number = 0,
+    _waitTimeSeconds: number = 0,
   ): Promise<QueueMessage<T>[]> {
     const queue = this.queues.get(queueUrl);
 

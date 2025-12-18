@@ -1,9 +1,6 @@
-import { createWriteStream, promises as fs } from 'fs';
-import { pipeline } from 'stream/promises';
 import { Readable, Transform } from 'stream';
-import * as path from 'path';
 import * as crypto from 'crypto';
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client } from '@aws-sdk/client-s3';
 import { Upload } from '@aws-sdk/lib-storage';
 import { DownloadTask } from '../../shared/interfaces/download-task.interface';
 import { ProcessingErrorCode } from '../../shared/interfaces/processing-result.interface';

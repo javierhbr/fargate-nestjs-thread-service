@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { StartExportJobUseCase } from '../../../src/application/use-cases/start-export-job.use-case';
 import { ExportStatusVO } from '../../../src/domain/value-objects/export-status.vo';
 import { JobStatusVO } from '../../../src/domain/value-objects/job-status.vo';

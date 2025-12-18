@@ -1,7 +1,7 @@
 /**
  * Step Functions Task Success Output
  */
-export interface StepFunctionsTaskSuccessOutput {
+export interface StepFunctionsTaskSuccessOutput extends Record<string, unknown> {
   jobId: string;
   exportId: string;
   userId: string;

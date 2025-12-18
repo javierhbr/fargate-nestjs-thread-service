@@ -41,6 +41,7 @@
     "@nestjs/core": "^10.3.0",
     "@nestjs/platform-fastify": "^10.3.0",
     "@nestjs/terminus": "^10.2.0",
+    "@ssut/nestjs-sqs": "^3.0.1",
     "fastify": "^4.25.2",
     "immer": "^11.0.1",
     "nestjs-pino": "^4.5.0",

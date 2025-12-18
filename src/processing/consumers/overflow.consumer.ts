@@ -1,8 +1,6 @@
 import { Injectable } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { AppConfig } from '../../config/configuration';
-import { SqsService, SqsConsumerBase } from '../../shared/aws/sqs';
-import { SqsMessageEnvelope } from '../../shared/aws/sqs/sqs-consumer.base';
+import { SqsMessageHandler } from '@ssut/nestjs-sqs';
+import { Message } from '@aws-sdk/client-sqs';
 import { DynamoDbService } from '../../shared/aws/dynamodb/dynamodb.service';
 import { PinoLoggerService } from '../../shared/logging/pino-logger.service';
 import {
@@ -14,47 +12,56 @@ import { validateDownloadTaskMessage } from '../dto/download-task.dto';
 import { TaskDispatcherService } from '../services/task-dispatcher.service';
 
 @Injectable()
-export class OverflowConsumer extends SqsConsumerBase<DownloadTaskMessage> {
+export class OverflowConsumer {
   constructor(
-    sqsService: SqsService,
-    logger: PinoLoggerService,
-    private readonly configService: ConfigService<AppConfig>,
+    private readonly logger: PinoLoggerService,
     private readonly poolManager: PoolManagerService,
     private readonly dynamoDb: DynamoDbService,
     private readonly taskDispatcher: TaskDispatcherService,
   ) {
-    const sqsConfig = configService.get('sqs', { infer: true })!;
-
-    super(sqsService, logger, {
-      queueUrl: sqsConfig.downloadTasksUrl,
-      batchSize: sqsConfig.maxMessages,
-    });
-
     this.logger.setContext(OverflowConsumer.name);
   }
 
-  /**
-   * Only receive messages when the pool has capacity
-   */
-  protected async shouldReceiveMessages(): Promise<boolean> {
+  @SqsMessageHandler('download-tasks-queue', false)
+  async handleMessage(message: Message): Promise<void> {
+    const messageId = message.MessageId || 'unknown';
+    const approximateReceiveCount = parseInt(
+      message.Attributes?.ApproximateReceiveCount || '1',
+      10,
+    );
+
+    // Check pool capacity before processing
     const hasCapacity = this.poolManager.canAcceptTask();
     const idleWorkers = this.poolManager.getIdleWorkerCount();
 
     this.logger.debug(
-      { hasCapacity, idleWorkers },
+      { messageId, hasCapacity, idleWorkers },
       'Checking pool capacity for overflow',
     );
 
-    return hasCapacity && idleWorkers > 0;
-  }
+    if (!hasCapacity || idleWorkers === 0) {
+      this.logger.debug(
+        { messageId, hasCapacity, idleWorkers },
+        'Pool at capacity or no idle workers, message will be retried',
+      );
+      // Throw error to make message visible again after visibility timeout
+      throw new Error('Pool capacity full, retry later');
+    }
 
-  protected async processMessage(
-    envelope: SqsMessageEnvelope<DownloadTaskMessage>,
-  ): Promise<void> {
-    const { body, messageId } = envelope;
+    // Parse message body
+    let body: DownloadTaskMessage;
+    try {
+      body = JSON.parse(message.Body || '{}');
+    } catch (error) {
+      this.logger.error(
+        { messageId, error: (error as Error).message },
+        'Failed to parse message body',
+      );
+      return; // Delete invalid message
+    }
 
     // Validate message
-    let validatedMessage;
+    let validatedMessage: DownloadTaskMessage;
     try {
       validatedMessage = validateDownloadTaskMessage(body);
     } catch (error) {
@@ -81,7 +88,7 @@ export class OverflowConsumer extends SqsConsumerBase<DownloadTaskMessage> {
       checksum: validatedMessage.checksum,
       outputKey: validatedMessage.outputKey,
       metadata: validatedMessage.metadata,
-      retryCount: envelope.approximateReceiveCount - 1,
+      retryCount: approximateReceiveCount - 1,
       maxRetries: 3,
       createdAt: new Date().toISOString(),
     };
@@ -98,9 +105,31 @@ export class OverflowConsumer extends SqsConsumerBase<DownloadTaskMessage> {
 
         await this.dynamoDb.incrementTaskCount(jobId, 'completedTasks');
       } else {
-        taskLogger.error({ error: result.error }, 'Task failed');
+        taskLogger.error(
+          { error: result.error?.message, code: result.error?.code },
+          'Task failed',
+        );
 
         await this.dynamoDb.incrementTaskCount(jobId, 'failedTasks');
+
+        // Check if max retries exceeded
+        if (approximateReceiveCount >= 3) {
+          this.logger.error(
+            {
+              messageId,
+              taskId,
+              jobId,
+              receiveCount: approximateReceiveCount,
+            },
+            'Max retries exceeded for download task',
+          );
+
+          // Don't throw - delete the message
+          return;
+        }
+
+        // Throw to retry
+        throw new Error(result.error?.message || 'Task failed');
       }
 
       // Check job completion
@@ -110,42 +139,28 @@ export class OverflowConsumer extends SqsConsumerBase<DownloadTaskMessage> {
         { error: (error as Error).message },
         'Error processing overflow task',
       );
-      throw error; // Re-throw to retry
-    }
-  }
 
-  protected async handleProcessingError(
-    envelope: SqsMessageEnvelope<DownloadTaskMessage>,
-    error: Error,
-  ): Promise<void> {
-    const maxRetries = 3;
+      // Check if max retries exceeded
+      if (approximateReceiveCount >= 3) {
+        this.logger.error(
+          {
+            messageId,
+            taskId,
+            jobId,
+            receiveCount: approximateReceiveCount,
+          },
+          'Max retries exceeded for download task',
+        );
 
-    if (envelope.approximateReceiveCount >= maxRetries) {
-      this.logger.error(
-        {
-          messageId: envelope.messageId,
-          taskId: envelope.body?.taskId,
-          jobId: envelope.body?.jobId,
-          receiveCount: envelope.approximateReceiveCount,
-        },
-        'Max retries exceeded for download task',
-      );
+        await this.dynamoDb.incrementTaskCount(jobId, 'failedTasks');
+        await this.taskDispatcher.checkJobCompletion(jobId);
 
-      // Mark task as failed in state
-      if (envelope.body?.jobId) {
-        await this.dynamoDb.incrementTaskCount(envelope.body.jobId, 'failedTasks');
-        await this.taskDispatcher.checkJobCompletion(envelope.body.jobId);
+        // Don't throw - delete the message
+        return;
       }
-    } else {
-      this.logger.warn(
-        {
-          messageId: envelope.messageId,
-          taskId: envelope.body?.taskId,
-          receiveCount: envelope.approximateReceiveCount,
-          error: error.message,
-        },
-        'Download task failed, will retry',
-      );
+
+      // Re-throw to retry
+      throw error;
     }
   }
 }

@@ -188,7 +188,9 @@ export namespace DownloadTaskEntity {
 
   // ===== Pure Functions for Computed Properties =====
 
-  export function getProcessingDuration(task: DownloadTaskEntityData): number | undefined {
+  export function getProcessingDuration(
+    task: DownloadTaskEntityData,
+  ): number | undefined {
     if (!task.startedAt) return undefined;
     const endTime = task.completedAt ?? new Date();
     return endTime.getTime() - task.startedAt.getTime();

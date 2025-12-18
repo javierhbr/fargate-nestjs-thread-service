@@ -1,5 +1,5 @@
 import { World, IWorldOptions, setWorldConstructor } from '@cucumber/cucumber';
-import { Test, TestingModule } from '@nestjs/testing';
+import { TestingModule } from '@nestjs/testing';
 import { ExportJobEntity } from '../../../src/domain/entities/export-job.entity';
 import { DownloadTaskEntity } from '../../../src/domain/entities/download-task.entity';
 import { DomainEvent } from '../../../src/domain/events/base.event';
