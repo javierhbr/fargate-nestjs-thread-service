@@ -1,6 +1,6 @@
 import { createWriteStream, promises as fs } from 'fs';
 import { pipeline } from 'stream/promises';
-import { Readable } from 'stream';
+import { Readable, Transform } from 'stream';
 import * as path from 'path';
 import * as crypto from 'crypto';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
@@ -31,8 +31,6 @@ export async function processFile(
   task: DownloadTask,
   config: WorkerConfig,
 ): Promise<FileProcessingResult> {
-  const tempFilePath = path.join(config.tempDir, `${task.taskId}_${task.fileName}`);
-
   const s3Client = new S3Client({
     region: config.awsRegion,
   });
@@ -40,22 +38,14 @@ export async function processFile(
   const ctx: ProcessingContext = {
     task,
     config,
-    tempFilePath,
+    tempFilePath: '', // Not used in streaming approach
     s3Client,
   };
 
   try {
-    // Ensure temp directory exists
-    await fs.mkdir(config.tempDir, { recursive: true });
-
-    // Step 1: Download file
-    await downloadFile(ctx);
-
-    // Step 2: Validate file
-    await validateFile(ctx);
-
-    // Step 3: Upload to S3
-    const result = await uploadToS3(ctx);
+    // Use streaming pipeline: Download → Checksum → Upload
+    // No temporary file needed - single pass through data
+    const result = await processFileStreaming(ctx);
 
     return {
       success: true,
@@ -73,20 +63,21 @@ export async function processFile(
       },
     };
   } finally {
-    // Cleanup temp file
-    try {
-      await fs.unlink(tempFilePath);
-    } catch {
-      // Ignore cleanup errors
-    }
     s3Client.destroy();
   }
 }
 
-async function downloadFile(ctx: ProcessingContext): Promise<void> {
-  const { task, tempFilePath, config } = ctx;
+/**
+ * Process file using streaming pipeline: Download → Checksum → Size Tracking → Upload
+ * Memory efficient: No temporary files, single pass through data
+ */
+async function processFileStreaming(
+  ctx: ProcessingContext,
+): Promise<{ key: string; size: number }> {
+  const { task, config, s3Client } = ctx;
 
   try {
+    // Step 1: Download file as stream
     const response = await fetch(task.downloadUrl, {
       signal: AbortSignal.timeout(300000), // 5 minute timeout
     });
@@ -103,14 +94,16 @@ async function downloadFile(ctx: ProcessingContext): Promise<void> {
       throw error;
     }
 
-    // Check content length against max size
+    // Step 2: Validate file size from Content-Length header
     const contentLength = response.headers.get('content-length');
+    let expectedSize = 0;
+
     if (contentLength) {
-      const sizeBytes = parseInt(contentLength, 10);
+      expectedSize = parseInt(contentLength, 10);
       const maxSizeBytes = config.maxFileSizeMb * 1024 * 1024;
-      if (sizeBytes > maxSizeBytes) {
+      if (expectedSize > maxSizeBytes) {
         const error = new Error(
-          `File size ${sizeBytes} exceeds max ${maxSizeBytes}`,
+          `File size ${expectedSize} exceeds max ${maxSizeBytes}`,
         ) as Error & { code: string; retryable: boolean };
         error.code = ProcessingErrorCode.VALIDATION_FAILED;
         error.retryable = false;
@@ -118,129 +111,147 @@ async function downloadFile(ctx: ProcessingContext): Promise<void> {
       }
     }
 
-    const writeStream = createWriteStream(tempFilePath);
-    await pipeline(Readable.fromWeb(response.body as never), writeStream);
-  } catch (error) {
-    if ((error as Error & { code?: string }).code) {
-      throw error;
-    }
-    const err = new Error(`Download failed: ${(error as Error).message}`) as Error & {
-      code: string;
-      retryable: boolean;
-    };
-    err.code = ProcessingErrorCode.DOWNLOAD_FAILED;
-    err.retryable = true;
-    throw err;
-  }
-}
+    // Step 3: Create streaming pipeline with checksum validation
+    const downloadStream = Readable.fromWeb(response.body as never);
+    let actualSize = 0;
+    let actualChecksum: string | null = null;
 
-async function validateFile(ctx: ProcessingContext): Promise<void> {
-  const { task, tempFilePath, config } = ctx;
+    // Create checksum and size tracking streams
+    const { stream: checksumStream, checksumPromise } = createChecksumStream(
+      downloadStream,
+      'sha256',
+    );
 
-  try {
-    const stats = await fs.stat(tempFilePath);
+    const sizeTrackingStream = createSizeTrackingStream((bytes) => {
+      actualSize = bytes;
+    });
 
-    // Validate file size
-    const maxSizeBytes = config.maxFileSizeMb * 1024 * 1024;
-    if (stats.size > maxSizeBytes) {
-      const error = new Error(
-        `File size ${stats.size} exceeds max ${maxSizeBytes}`,
-      ) as Error & { code: string; retryable: boolean };
-      error.code = ProcessingErrorCode.VALIDATION_FAILED;
-      error.retryable = false;
-      throw error;
-    }
+    // Pipeline: Download → Checksum → Size Tracking
+    const pipelineStream = checksumStream.pipe(sizeTrackingStream);
 
-    // Validate checksum if provided
-    if (task.checksum) {
-      const fileBuffer = await fs.readFile(tempFilePath);
-      const hash = crypto.createHash('sha256').update(fileBuffer).digest('hex');
-
-      if (hash !== task.checksum) {
-        const error = new Error(
-          `Checksum mismatch: expected ${task.checksum}, got ${hash}`,
-        ) as Error & { code: string; retryable: boolean };
-        error.code = ProcessingErrorCode.VALIDATION_FAILED;
-        error.retryable = true; // May be transient download issue
-        throw error;
-      }
-    }
-  } catch (error) {
-    if ((error as Error & { code?: string }).code) {
-      throw error;
-    }
-    const err = new Error(`Validation failed: ${(error as Error).message}`) as Error & {
-      code: string;
-      retryable: boolean;
-    };
-    err.code = ProcessingErrorCode.VALIDATION_FAILED;
-    err.retryable = false;
-    throw err;
-  }
-}
-
-async function uploadToS3(
-  ctx: ProcessingContext,
-): Promise<{ key: string; size: number }> {
-  const { task, tempFilePath, config, s3Client } = ctx;
-
-  try {
-    const stats = await fs.stat(tempFilePath);
+    // Step 4: Upload to S3 using streaming (always use Upload class for efficiency)
     const fullKey = `${config.s3Prefix}${task.outputKey}`;
 
-    // Use multipart upload for large files
-    if (stats.size > 100 * 1024 * 1024) {
-      // > 100MB
-      const fileStream = await fs.open(tempFilePath, 'r');
-      const readStream = fileStream.createReadStream();
-
-      const upload = new Upload({
-        client: s3Client,
-        params: {
-          Bucket: config.s3BucketName,
-          Key: fullKey,
-          Body: readStream,
-          Metadata: {
-            jobId: task.jobId,
-            taskId: task.taskId,
-            originalFileName: task.fileName,
-          },
+    const upload = new Upload({
+      client: s3Client,
+      params: {
+        Bucket: config.s3BucketName,
+        Key: fullKey,
+        Body: pipelineStream,
+        Metadata: {
+          jobId: task.jobId,
+          taskId: task.taskId,
+          originalFileName: task.fileName,
         },
-        queueSize: 4,
-        partSize: 10 * 1024 * 1024,
-        leavePartsOnError: false,
-      });
+      },
+      queueSize: 4,
+      partSize: 10 * 1024 * 1024,
+      leavePartsOnError: false,
+    });
 
-      await upload.done();
-      await fileStream.close();
-    } else {
-      const fileBuffer = await fs.readFile(tempFilePath);
+    await upload.done();
 
-      await s3Client.send(
-        new PutObjectCommand({
-          Bucket: config.s3BucketName,
-          Key: fullKey,
-          Body: fileBuffer,
-          Metadata: {
-            jobId: task.jobId,
-            taskId: task.taskId,
-            originalFileName: task.fileName,
-          },
-        }),
-      );
+    // Step 5: Get checksum and validate
+    actualChecksum = await checksumPromise;
+
+    if (task.checksum && actualChecksum !== task.checksum) {
+      const error = new Error(
+        `Checksum mismatch: expected ${task.checksum}, got ${actualChecksum}`,
+      ) as Error & { code: string; retryable: boolean };
+      error.code = ProcessingErrorCode.VALIDATION_FAILED;
+      error.retryable = true; // May be transient download issue
+      throw error;
+    }
+
+    // Step 6: Validate actual size matches expected
+    if (expectedSize > 0 && actualSize !== expectedSize) {
+      const error = new Error(
+        `Size mismatch: expected ${expectedSize}, got ${actualSize}`,
+      ) as Error & { code: string; retryable: boolean };
+      error.code = ProcessingErrorCode.VALIDATION_FAILED;
+      error.retryable = true;
+      throw error;
     }
 
     return {
       key: fullKey,
-      size: stats.size,
+      size: actualSize,
     };
   } catch (error) {
-    const err = new Error(`Upload failed: ${(error as Error).message}`) as Error & {
+    // Re-throw errors with proper code if they don't have one
+    if ((error as Error & { code?: string }).code) {
+      throw error;
+    }
+
+    const err = new Error(
+      `File processing failed: ${(error as Error).message}`,
+    ) as Error & {
       code: string;
       retryable: boolean;
     };
-    err.code = ProcessingErrorCode.UPLOAD_FAILED;
+    err.code = ProcessingErrorCode.UNKNOWN;
     err.retryable = true;
     throw err;
   }
+}
+
+/**
+ * Create a Transform stream that calculates checksum while data passes through
+ * Memory efficient: Only processes chunks in flight, no buffering
+ */
+function createChecksumStream(
+  sourceStream: Readable,
+  algorithm: string,
+): { stream: Transform; checksumPromise: Promise<string> } {
+  const hash = crypto.createHash(algorithm);
+
+  let resolveChecksum: (checksum: string) => void;
+  const checksumPromise = new Promise<string>((resolve) => {
+    resolveChecksum = resolve;
+  });
+
+  const checksumTransform = new Transform({
+    transform(chunk: Buffer, encoding, callback) {
+      try {
+        // Update hash with this chunk
+        hash.update(chunk);
+        // Pass chunk through unchanged
+        callback(null, chunk);
+      } catch (error) {
+        callback(error as Error);
+      }
+    },
+    flush(callback) {
+      try {
+        // Finalize hash when stream ends
+        const checksum = hash.digest('hex');
+        resolveChecksum(checksum);
+        callback();
+      } catch (error) {
+        callback(error as Error);
+      }
+    },
+  });
+
+  // Pipe source through checksum transform
+  const stream = sourceStream.pipe(checksumTransform);
+
+  return { stream, checksumPromise };
+}
+
+/**
+ * Create a Transform stream that tracks bytes processed
+ * Useful for validating file size and monitoring progress
+ */
+function createSizeTrackingStream(onBytesProcessed: (bytes: number) => void): Transform {
+  let bytesProcessed = 0;
+
+  return new Transform({
+    transform(chunk: Buffer, encoding, callback) {
+      bytesProcessed += chunk.length;
+      onBytesProcessed(bytesProcessed);
+      // Pass chunk through unchanged
+      callback(null, chunk);
+    },
+  });
 }

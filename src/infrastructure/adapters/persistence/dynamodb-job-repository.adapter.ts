@@ -72,7 +72,10 @@ export class DynamoDbJobRepositoryAdapter implements JobStateRepositoryPort {
     return this.toDomainEntity(updatedJobState);
   }
 
-  async incrementFailedTasks(jobId: string, errorMessage?: string): Promise<ExportJobEntity> {
+  async incrementFailedTasks(
+    jobId: string,
+    errorMessage?: string,
+  ): Promise<ExportJobEntity> {
     await this.dynamoDb.incrementTaskCount(jobId, 'failedTasks');
 
     if (errorMessage) {

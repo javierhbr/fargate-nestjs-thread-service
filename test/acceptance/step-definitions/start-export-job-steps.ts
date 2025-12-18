@@ -39,14 +39,14 @@ Given(
     ];
 
     exportApi.createMockExport(exportId, userId, ExportStatusVO.ready(), downloadUrls);
-  }
+  },
 );
 
 Given(
   'an export {string} for user {string} is in PROCESSING state',
   function (this: ExportJobWorld, exportId: string, userId: string) {
     exportApi.createMockExport(exportId, userId, ExportStatusVO.processing());
-  }
+  },
 );
 
 Given(
@@ -58,21 +58,32 @@ Given(
       status: 'PROCESSING',
       downloadUrls: ['https://example.com/file1.csv'],
     } as any);
-  }
+  },
 );
 
 Given(
   'an export {string} for user {string} has FAILED with error {string}',
-  function (this: ExportJobWorld, exportId: string, userId: string, errorMessage: string) {
-    exportApi.createMockExport(exportId, userId, ExportStatusVO.failed(), undefined, errorMessage);
-  }
+  function (
+    this: ExportJobWorld,
+    exportId: string,
+    userId: string,
+    errorMessage: string,
+  ) {
+    exportApi.createMockExport(
+      exportId,
+      userId,
+      ExportStatusVO.failed(),
+      undefined,
+      errorMessage,
+    );
+  },
 );
 
 Given(
   'an export {string} for user {string} has EXPIRED',
   function (this: ExportJobWorld, exportId: string, userId: string) {
     exportApi.createMockExport(exportId, userId, ExportStatusVO.expired());
-  }
+  },
 );
 
 When(
@@ -101,7 +112,7 @@ When(
     } catch (error) {
       this.context.lastError = error as Error;
     }
-  }
+  },
 );
 
 Then('the job should be created successfully', function (this: ExportJobWorld) {
@@ -115,7 +126,7 @@ Then(
   function (this: ExportJobWorld, expectedStatus: string) {
     expect(this.context.currentJob).to.not.be.undefined;
     expect(this.context.currentJob!.jobState.status.value).to.equal(expectedStatus);
-  }
+  },
 );
 
 Then('the export should not need polling', function (this: ExportJobWorld) {
@@ -130,9 +141,12 @@ Then('the export should need polling', function (this: ExportJobWorld) {
   expect(this.context.lastResult.needsPolling).to.equal(true);
 });
 
-Then('the system should not be ready to start downloading yet', function (this: ExportJobWorld) {
-  expect(this.context.lastResult.canStartDownloading).to.equal(false);
-});
+Then(
+  'the system should not be ready to start downloading yet',
+  function (this: ExportJobWorld) {
+    expect(this.context.lastResult.canStartDownloading).to.equal(false);
+  },
+);
 
 Then(
   'a {string} event should be published',
@@ -145,11 +159,14 @@ Then(
     if (events.length === 0) {
       console.log(`[DEBUG] No ${eventType} events found`);
       console.log(`[DEBUG] Total events published: ${allEvents.length}`);
-      console.log(`[DEBUG] Event types:`, allEvents.map((e: any) => e.eventName));
+      console.log(
+        `[DEBUG] Event types:`,
+        allEvents.map((e: any) => e.eventName),
+      );
     }
 
     expect(events.length).to.be.greaterThan(0);
-  }
+  },
 );
 
 Then(
@@ -157,7 +174,7 @@ Then(
   function (this: ExportJobWorld, expectedError: string) {
     expect(this.context.currentJob).to.not.be.undefined;
     expect(this.context.currentJob!.jobState.errorMessage).to.equal(expectedError);
-  }
+  },
 );
 
 Then(
@@ -165,7 +182,7 @@ Then(
   function (this: ExportJobWorld, expectedErrorPart: string) {
     expect(this.context.currentJob).to.not.be.undefined;
     expect(this.context.currentJob!.jobState.errorMessage).to.include(expectedErrorPart);
-  }
+  },
 );
 
 Then(
@@ -178,7 +195,7 @@ Then(
     for (const [key, value] of Object.entries(expectedMetadata)) {
       expect(this.context.currentJob!.metadata![key]).to.equal(value);
     }
-  }
+  },
 );
 
 Then(
@@ -186,5 +203,5 @@ Then(
   function (this: ExportJobWorld, expectedToken: string) {
     expect(this.context.currentJob).to.not.be.undefined;
     expect(this.context.currentJob!.taskToken).to.equal(expectedToken);
-  }
+  },
 );

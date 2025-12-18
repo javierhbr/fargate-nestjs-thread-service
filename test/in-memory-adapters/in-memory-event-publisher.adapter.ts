@@ -35,8 +35,7 @@ export class InMemoryEventPublisherAdapter implements EventPublisherPort {
    * Get events by type
    */
   getEventsByType<T extends DomainEvent>(eventName: string): T[] {
-    return this.publishedEvents
-      .filter(event => event.eventName === eventName) as T[];
+    return this.publishedEvents.filter((event) => event.eventName === eventName) as T[];
   }
 
   /**
@@ -50,14 +49,14 @@ export class InMemoryEventPublisherAdapter implements EventPublisherPort {
    * Get event count by type
    */
   getEventCountByType(eventName: string): number {
-    return this.publishedEvents.filter(event => event.eventName === eventName).length;
+    return this.publishedEvents.filter((event) => event.eventName === eventName).length;
   }
 
   /**
    * Check if an event type was published
    */
   hasEventType(eventName: string): boolean {
-    return this.publishedEvents.some(event => event.eventName === eventName);
+    return this.publishedEvents.some((event) => event.eventName === eventName);
   }
 
   /**
@@ -88,8 +87,8 @@ export class InMemoryEventPublisherAdapter implements EventPublisherPort {
    * Get events in chronological order
    */
   getEventsInOrder(): DomainEvent[] {
-    return [...this.publishedEvents].sort((a, b) =>
-      a.occurredAt.getTime() - b.occurredAt.getTime()
+    return [...this.publishedEvents].sort(
+      (a, b) => a.occurredAt.getTime() - b.occurredAt.getTime(),
     );
   }
 

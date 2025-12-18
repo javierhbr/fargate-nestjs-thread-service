@@ -49,7 +49,10 @@ export class InMemoryJobRepositoryAdapter implements JobStateRepositoryPort {
     return this.cloneJob(updatedJob);
   }
 
-  async incrementFailedTasks(jobId: string, errorMessage?: string): Promise<ExportJobEntity> {
+  async incrementFailedTasks(
+    jobId: string,
+    errorMessage?: string,
+  ): Promise<ExportJobEntity> {
     const job = this.jobs.get(jobId);
     if (!job) {
       throw new Error(`Job not found: ${jobId}`);
@@ -80,14 +83,15 @@ export class InMemoryJobRepositoryAdapter implements JobStateRepositoryPort {
   }
 
   async findByStatus(status: string, limit?: number): Promise<ExportJobEntity[]> {
-    const jobs = Array.from(this.jobs.values())
-      .filter(job => job.jobState.status.value === status);
+    const jobs = Array.from(this.jobs.values()).filter(
+      (job) => job.jobState.status.value === status,
+    );
 
     if (limit) {
-      return jobs.slice(0, limit).map(job => this.cloneJob(job));
+      return jobs.slice(0, limit).map((job) => this.cloneJob(job));
     }
 
-    return jobs.map(job => this.cloneJob(job));
+    return jobs.map((job) => this.cloneJob(job));
   }
 
   // Helper methods for testing
@@ -96,7 +100,7 @@ export class InMemoryJobRepositoryAdapter implements JobStateRepositoryPort {
   }
 
   getAllJobs(): ExportJobEntity[] {
-    return Array.from(this.jobs.values()).map(job => this.cloneJob(job));
+    return Array.from(this.jobs.values()).map((job) => this.cloneJob(job));
   }
 
   getJobCount(): number {

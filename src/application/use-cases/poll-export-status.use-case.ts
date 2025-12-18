@@ -60,7 +60,9 @@ export class PollExportStatusUseCase implements PollExportStatusPort {
 
         // Set total tasks based on download URLs
         if (exportStatus.downloadUrls && exportStatus.downloadUrls.length > 0) {
-          transitionedJob = transitionedJob.setTotalTasks(exportStatus.downloadUrls.length);
+          transitionedJob = transitionedJob.setTotalTasks(
+            exportStatus.downloadUrls.length,
+          );
           this.logger.debug(
             `Set total tasks to ${exportStatus.downloadUrls.length} for job ${command.jobId}`,
           );
@@ -138,7 +140,10 @@ export class PollExportStatusUseCase implements PollExportStatusPort {
           const transitionedJob = job.transitionToFailed(errorMessage);
 
           // Use the returned entity from repository to prevent stale data
-          await this.jobRepository.updateJobState(command.jobId, transitionedJob.jobState);
+          await this.jobRepository.updateJobState(
+            command.jobId,
+            transitionedJob.jobState,
+          );
         }
       } catch (repoError) {
         this.logger.error(`Failed to update job state for ${command.jobId}:`, repoError);

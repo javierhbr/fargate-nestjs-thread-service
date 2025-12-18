@@ -37,7 +37,12 @@ export function clearEndToEndAdapters() {
 
 Given(
   'an export {string} for user {string} is already READY with download URLs:',
-  function (this: ExportJobWorld, exportId: string, userId: string, dataTable: DataTable) {
+  function (
+    this: ExportJobWorld,
+    exportId: string,
+    userId: string,
+    dataTable: DataTable,
+  ) {
     ensureAdaptersInitialized(this);
 
     const downloadUrls = dataTable.raw().flat();
@@ -48,7 +53,7 @@ Given(
       status: 'READY',
       downloadUrls,
     });
-  }
+  },
 );
 
 Given('the file storage is configured', function (this: ExportJobWorld) {
@@ -74,18 +79,23 @@ Given(
     // Configure export to transition after 2 polls
     exportApi.createMockExport(exportId, userId, ExportStatusVO.processing());
     exportApi.configureExportToTransition(exportId, 2, downloadUrls);
-  }
+  },
 );
 
 Given(
   'an export {string} for user {string} will fail during polling with error {string}',
-  function (this: ExportJobWorld, exportId: string, userId: string, errorMessage: string) {
+  function (
+    this: ExportJobWorld,
+    exportId: string,
+    userId: string,
+    errorMessage: string,
+  ) {
     ensureAdaptersInitialized(this);
 
     // Configure export to fail after 2 polls
     exportApi.createMockExport(exportId, userId, ExportStatusVO.processing());
     exportApi.configureExportToFail(exportId, 2, errorMessage);
-  }
+  },
 );
 
 When(
@@ -108,7 +118,7 @@ When(
     } catch (error) {
       this.context.lastError = error as Error;
     }
-  }
+  },
 );
 
 Then('download URLs should be available', function (this: ExportJobWorld) {
@@ -126,7 +136,7 @@ Then(
   function (this: ExportJobWorld, count: number, eventType: string) {
     const events = this.context.eventPublisher!.getEventsByType(eventType);
     expect(events.length).to.equal(count);
-  }
+  },
 );
 
 Then(
@@ -138,7 +148,7 @@ Then(
     expect(job.jobState.totalTasks).to.equal(Number(expectedState.totalTasks));
     expect(job.jobState.completedTasks).to.equal(Number(expectedState.completedTasks));
     expect(job.jobState.failedTasks).to.equal(Number(expectedState.failedTasks));
-  }
+  },
 );
 
 Then('the job state invariants should be valid', function (this: ExportJobWorld) {
@@ -157,6 +167,6 @@ Then('the job state invariants should be valid', function (this: ExportJobWorld)
   expect(job.jobState.createdAt).to.be.instanceOf(Date);
   expect(job.jobState.updatedAt).to.be.instanceOf(Date);
   expect(job.jobState.updatedAt.getTime()).to.be.greaterThanOrEqual(
-    job.jobState.createdAt.getTime()
+    job.jobState.createdAt.getTime(),
   );
 });

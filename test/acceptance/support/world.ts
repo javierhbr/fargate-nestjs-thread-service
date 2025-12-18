@@ -26,19 +26,25 @@ export interface TestContext {
   publishedEvents: DomainEvent[];
 
   // Export API Simulation State
-  exportApiResponses: Map<string, {
-    status: 'PENDING' | 'PROCESSING' | 'READY' | 'FAILED' | 'EXPIRED';
-    downloadUrls?: string[];
-    errorMessage?: string;
-  }>;
+  exportApiResponses: Map<
+    string,
+    {
+      status: 'PENDING' | 'PROCESSING' | 'READY' | 'FAILED' | 'EXPIRED';
+      downloadUrls?: string[];
+      errorMessage?: string;
+    }
+  >;
 
   // File Storage Simulation State
   storedFiles: Map<string, Buffer>;
-  fileMetadata: Map<string, {
-    size: number;
-    checksum?: string;
-    contentType?: string;
-  }>;
+  fileMetadata: Map<
+    string,
+    {
+      size: number;
+      checksum?: string;
+      contentType?: string;
+    }
+  >;
 
   // Message Queue Simulation State
   queuedMessages: Map<string, any[]>;
@@ -121,23 +127,31 @@ export class ExportJobWorld extends World {
   }
 
   getEventsByType<T extends DomainEvent>(eventName: string): T[] {
-    return this.context.publishedEvents
-      .filter(event => event.eventName === eventName) as T[];
+    return this.context.publishedEvents.filter(
+      (event) => event.eventName === eventName,
+    ) as T[];
   }
 
-  setExportApiResponse(exportId: string, response: {
-    status: 'PENDING' | 'PROCESSING' | 'READY' | 'FAILED' | 'EXPIRED';
-    downloadUrls?: string[];
-    errorMessage?: string;
-  }): void {
+  setExportApiResponse(
+    exportId: string,
+    response: {
+      status: 'PENDING' | 'PROCESSING' | 'READY' | 'FAILED' | 'EXPIRED';
+      downloadUrls?: string[];
+      errorMessage?: string;
+    },
+  ): void {
     this.context.exportApiResponses.set(exportId, response);
   }
 
-  storeFile(key: string, content: Buffer, metadata?: {
-    size: number;
-    checksum?: string;
-    contentType?: string;
-  }): void {
+  storeFile(
+    key: string,
+    content: Buffer,
+    metadata?: {
+      size: number;
+      checksum?: string;
+      contentType?: string;
+    },
+  ): void {
     this.context.storedFiles.set(key, content);
     if (metadata) {
       this.context.fileMetadata.set(key, metadata);

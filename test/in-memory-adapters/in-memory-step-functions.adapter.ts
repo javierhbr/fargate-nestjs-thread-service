@@ -33,7 +33,10 @@ export class InMemoryStepFunctionsAdapter implements StepFunctionsPort {
     });
   }
 
-  async sendTaskFailure(taskToken: string, failure: StepFunctionsTaskFailure): Promise<void> {
+  async sendTaskFailure(
+    taskToken: string,
+    failure: StepFunctionsTaskFailure,
+  ): Promise<void> {
     this.callbacks.push({
       type: 'failure',
       taskToken,
@@ -55,21 +58,21 @@ export class InMemoryStepFunctionsAdapter implements StepFunctionsPort {
    * Get success callbacks
    */
   getSuccessCallbacks(): CallbackRecord[] {
-    return this.callbacks.filter(cb => cb.type === 'success');
+    return this.callbacks.filter((cb) => cb.type === 'success');
   }
 
   /**
    * Get failure callbacks
    */
   getFailureCallbacks(): CallbackRecord[] {
-    return this.callbacks.filter(cb => cb.type === 'failure');
+    return this.callbacks.filter((cb) => cb.type === 'failure');
   }
 
   /**
    * Get callback for a specific task token
    */
   getCallbackForToken(taskToken: string): CallbackRecord | null {
-    const callback = this.callbacks.find(cb => cb.taskToken === taskToken);
+    const callback = this.callbacks.find((cb) => cb.taskToken === taskToken);
     return callback || null;
   }
 
@@ -78,7 +81,7 @@ export class InMemoryStepFunctionsAdapter implements StepFunctionsPort {
    */
   wasSuccessSent(taskToken: string): boolean {
     return this.callbacks.some(
-      cb => cb.taskToken === taskToken && cb.type === 'success'
+      (cb) => cb.taskToken === taskToken && cb.type === 'success',
     );
   }
 
@@ -87,7 +90,7 @@ export class InMemoryStepFunctionsAdapter implements StepFunctionsPort {
    */
   wasFailureSent(taskToken: string): boolean {
     return this.callbacks.some(
-      cb => cb.taskToken === taskToken && cb.type === 'failure'
+      (cb) => cb.taskToken === taskToken && cb.type === 'failure',
     );
   }
 
@@ -96,7 +99,7 @@ export class InMemoryStepFunctionsAdapter implements StepFunctionsPort {
    */
   getSuccessOutput(taskToken: string): StepFunctionsTaskSuccessOutput | null {
     const callback = this.callbacks.find(
-      cb => cb.taskToken === taskToken && cb.type === 'success'
+      (cb) => cb.taskToken === taskToken && cb.type === 'success',
     );
     return callback?.output || null;
   }
@@ -106,7 +109,7 @@ export class InMemoryStepFunctionsAdapter implements StepFunctionsPort {
    */
   getFailureDetails(taskToken: string): StepFunctionsTaskFailure | null {
     const callback = this.callbacks.find(
-      cb => cb.taskToken === taskToken && cb.type === 'failure'
+      (cb) => cb.taskToken === taskToken && cb.type === 'failure',
     );
     return callback?.failure || null;
   }
@@ -122,14 +125,14 @@ export class InMemoryStepFunctionsAdapter implements StepFunctionsPort {
    * Get success callback count
    */
   getSuccessCount(): number {
-    return this.callbacks.filter(cb => cb.type === 'success').length;
+    return this.callbacks.filter((cb) => cb.type === 'success').length;
   }
 
   /**
    * Get failure callback count
    */
   getFailureCount(): number {
-    return this.callbacks.filter(cb => cb.type === 'failure').length;
+    return this.callbacks.filter((cb) => cb.type === 'failure').length;
   }
 
   /**
@@ -143,8 +146,8 @@ export class InMemoryStepFunctionsAdapter implements StepFunctionsPort {
    * Get callbacks in chronological order
    */
   getCallbacksInOrder(): CallbackRecord[] {
-    return [...this.callbacks].sort((a, b) =>
-      a.timestamp.getTime() - b.timestamp.getTime()
+    return [...this.callbacks].sort(
+      (a, b) => a.timestamp.getTime() - b.timestamp.getTime(),
     );
   }
 
@@ -152,9 +155,7 @@ export class InMemoryStepFunctionsAdapter implements StepFunctionsPort {
    * Get the last callback
    */
   getLastCallback(): CallbackRecord | null {
-    return this.callbacks.length > 0
-      ? this.callbacks[this.callbacks.length - 1]
-      : null;
+    return this.callbacks.length > 0 ? this.callbacks[this.callbacks.length - 1] : null;
   }
 
   /**

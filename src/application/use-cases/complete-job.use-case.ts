@@ -164,9 +164,13 @@ export class CompleteJobUseCase implements CompleteJobPort {
       });
 
       if (success) {
-        this.logger.log(`Sent Step Functions success callback for job ${job.jobId} (all tasks succeeded)`);
+        this.logger.log(
+          `Sent Step Functions success callback for job ${job.jobId} (all tasks succeeded)`,
+        );
       } else {
-        this.logger.log(`Sent Step Functions success callback for job ${job.jobId} (partial success: ${job.failedTasks} failed tasks)`);
+        this.logger.log(
+          `Sent Step Functions success callback for job ${job.jobId} (partial success: ${job.failedTasks} failed tasks)`,
+        );
       }
     } catch (error) {
       // Log callback errors but don't fail the job

@@ -72,7 +72,9 @@ export class InMemoryFileStorageAdapter implements FileStoragePort {
   ): Promise<UploadResult> {
     // In tests, we don't actually read from filesystem
     // This is a mock implementation
-    throw new Error('uploadFile not supported in in-memory adapter. Use uploadBuffer instead.');
+    throw new Error(
+      'uploadFile not supported in in-memory adapter. Use uploadBuffer instead.',
+    );
   }
 
   async downloadStream(bucket: string, key: string): Promise<DownloadResult> {
@@ -93,10 +95,16 @@ export class InMemoryFileStorageAdapter implements FileStoragePort {
     };
   }
 
-  async downloadFile(bucket: string, key: string, destinationPath: string): Promise<void> {
+  async downloadFile(
+    bucket: string,
+    key: string,
+    destinationPath: string,
+  ): Promise<void> {
     // In tests, we don't actually write to filesystem
     // This is a mock implementation
-    throw new Error('downloadFile not supported in in-memory adapter. Use downloadStream instead.');
+    throw new Error(
+      'downloadFile not supported in in-memory adapter. Use downloadStream instead.',
+    );
   }
 
   async fileExists(bucket: string, key: string): Promise<boolean> {
@@ -117,7 +125,7 @@ export class InMemoryFileStorageAdapter implements FileStoragePort {
   async deleteFiles(bucket: string, keys: string[]): Promise<void> {
     const bucketStorage = this.storage.get(bucket);
     if (bucketStorage) {
-      keys.forEach(key => bucketStorage.delete(key));
+      keys.forEach((key) => bucketStorage.delete(key));
     }
   }
 
@@ -172,7 +180,7 @@ export class InMemoryFileStorageAdapter implements FileStoragePort {
    */
   getFileCount(): number {
     let count = 0;
-    this.storage.forEach(bucket => {
+    this.storage.forEach((bucket) => {
       count += bucket.size;
     });
     return count;
@@ -188,7 +196,12 @@ export class InMemoryFileStorageAdapter implements FileStoragePort {
   /**
    * Create a mock downloadable file for testing
    */
-  createMockFile(bucket: string, key: string, content: string | Buffer, contentType?: string): void {
+  createMockFile(
+    bucket: string,
+    key: string,
+    content: string | Buffer,
+    contentType?: string,
+  ): void {
     const buffer = Buffer.isBuffer(content) ? content : Buffer.from(content);
     const etag = this.calculateETag(buffer);
 
@@ -221,7 +234,7 @@ export class InMemoryFileStorageAdapter implements FileStoragePort {
   private async streamToBuffer(stream: Readable): Promise<Buffer> {
     const chunks: Buffer[] = [];
     return new Promise((resolve, reject) => {
-      stream.on('data', chunk => chunks.push(Buffer.from(chunk)));
+      stream.on('data', (chunk) => chunks.push(Buffer.from(chunk)));
       stream.on('error', reject);
       stream.on('end', () => resolve(Buffer.concat(chunks)));
     });

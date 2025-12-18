@@ -55,7 +55,10 @@ export class InMemoryExportApiAdapter implements ExportApiPort {
     exportData.pollCount++;
 
     // Check if we should transition status based on poll count
-    if (exportData.transitionAtPoll && exportData.pollCount >= exportData.transitionAtPoll) {
+    if (
+      exportData.transitionAtPoll &&
+      exportData.pollCount >= exportData.transitionAtPoll
+    ) {
       this.applyScheduledTransition(exportData);
     }
 
@@ -228,6 +231,6 @@ export class InMemoryExportApiAdapter implements ExportApiPort {
   }
 
   private sleep(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 }

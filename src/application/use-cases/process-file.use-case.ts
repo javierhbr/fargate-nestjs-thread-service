@@ -36,9 +36,7 @@ export class ProcessFileUseCase implements ProcessFilePort {
       const response = await this.httpClient.downloadToStream(command.downloadUrl);
 
       if (response.statusCode !== 200) {
-        throw new Error(
-          `Failed to download file: HTTP ${response.statusCode}`,
-        );
+        throw new Error(`Failed to download file: HTTP ${response.statusCode}`);
       }
 
       // Validate expected file size from Content-Length header if provided
@@ -73,9 +71,9 @@ export class ProcessFileUseCase implements ProcessFilePort {
         );
 
         // Track bytes for size validation
-        const sizeTrackingStream = this.createSizeTrackingStream(
-          (bytes) => { bytesProcessed = bytes; },
-        );
+        const sizeTrackingStream = this.createSizeTrackingStream((bytes) => {
+          bytesProcessed = bytes;
+        });
 
         // Create pipeline: Download → SizeTracking → Checksum → Upload
         const pipelineStream = checksumStream.pipe(sizeTrackingStream);
@@ -108,9 +106,9 @@ export class ProcessFileUseCase implements ProcessFilePort {
         this.logger.debug(`Checksum validation passed: ${actualChecksum}`);
       } else {
         // Stream without checksum validation (faster)
-        const sizeTrackingStream = this.createSizeTrackingStream(
-          (bytes) => { bytesProcessed = bytes; },
-        );
+        const sizeTrackingStream = this.createSizeTrackingStream((bytes) => {
+          bytesProcessed = bytes;
+        });
 
         const pipelineStream = response.body.pipe(sizeTrackingStream);
 
@@ -210,9 +208,7 @@ export class ProcessFileUseCase implements ProcessFilePort {
    * Create a Transform stream that tracks bytes processed
    * Useful for validating file size and monitoring progress
    */
-  private createSizeTrackingStream(
-    onBytesProcessed: (bytes: number) => void,
-  ): Transform {
+  private createSizeTrackingStream(onBytesProcessed: (bytes: number) => void): Transform {
     let bytesProcessed = 0;
 
     return new Transform({

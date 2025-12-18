@@ -64,7 +64,7 @@ Given(
     const repo = this.context.jobRepository || jobRepository;
     await repo.save(job);
     this.setJob(job);
-  }
+  },
 );
 
 Given(
@@ -85,7 +85,7 @@ Given(
     const repo = this.context.jobRepository || jobRepository;
     await repo.save(job);
     this.setJob(job);
-  }
+  },
 );
 
 Given(
@@ -106,7 +106,7 @@ Given(
     const repo = this.context.jobRepository || jobRepository;
     await repo.save(jobWithToken);
     this.setJob(jobWithToken);
-  }
+  },
 );
 
 When(
@@ -128,12 +128,17 @@ When(
     } catch (error) {
       this.context.lastError = error as Error;
     }
-  }
+  },
 );
 
 When(
   'I complete task {string} for job {string} with failure and error {string}',
-  async function (this: ExportJobWorld, taskId: string, jobId: string, errorMessage: string) {
+  async function (
+    this: ExportJobWorld,
+    taskId: string,
+    jobId: string,
+    errorMessage: string,
+  ) {
     try {
       // Use adapters from context if available (for cross-file scenarios), otherwise use module-level
       const repo = this.context.jobRepository || jobRepository;
@@ -151,7 +156,7 @@ When(
     } catch (error) {
       this.context.lastError = error as Error;
     }
-  }
+  },
 );
 
 When(
@@ -177,7 +182,7 @@ When(
       this.context.lastResult = result;
       this.setJob(result.job);
     }
-  }
+  },
 );
 
 Then(
@@ -187,7 +192,9 @@ Then(
 
     const actualCount = this.context.currentJob!.jobState.completedTasks;
     if (actualCount !== expectedCount) {
-      console.log(`[DEBUG] Expected ${expectedCount} completed tasks but got ${actualCount}`);
+      console.log(
+        `[DEBUG] Expected ${expectedCount} completed tasks but got ${actualCount}`,
+      );
       console.log(`[DEBUG] Job state:`, {
         totalTasks: this.context.currentJob!.jobState.totalTasks,
         completedTasks: actualCount,
@@ -196,7 +203,7 @@ Then(
     }
 
     expect(actualCount).to.equal(expectedCount);
-  }
+  },
 );
 
 Then(
@@ -204,7 +211,7 @@ Then(
   function (this: ExportJobWorld, expectedCount: number) {
     expect(this.context.currentJob).to.not.be.undefined;
     expect(this.context.currentJob!.jobState.failedTasks).to.equal(expectedCount);
-  }
+  },
 );
 
 Then('the job should not be marked as complete', function (this: ExportJobWorld) {
@@ -224,7 +231,9 @@ Then('not all tasks should have succeeded', function (this: ExportJobWorld) {
 });
 
 Then('a Step Functions success callback should be sent', function (this: ExportJobWorld) {
-  const successCallbacks = (this.context.stepFunctions || stepFunctions).getSuccessCallbacks();
+  const successCallbacks = (
+    this.context.stepFunctions || stepFunctions
+  ).getSuccessCallbacks();
   expect(successCallbacks.length).to.be.greaterThan(0);
 });
 
@@ -239,9 +248,11 @@ Then(
     expect(output!.jobId).to.equal(this.context.currentJob!.jobId);
     expect(output!.status).to.equal('COMPLETED');
     expect(output!.totalTasks).to.equal(this.context.currentJob!.jobState.totalTasks);
-    expect(output!.completedTasks).to.equal(this.context.currentJob!.jobState.completedTasks);
+    expect(output!.completedTasks).to.equal(
+      this.context.currentJob!.jobState.completedTasks,
+    );
     expect(output!.failedTasks).to.equal(this.context.currentJob!.jobState.failedTasks);
-  }
+  },
 );
 
 Then(
@@ -253,5 +264,5 @@ Then(
 
     expect(output).to.not.be.undefined;
     expect(output!.failedTasks).to.be.greaterThan(0);
-  }
+  },
 );

@@ -78,16 +78,16 @@ export class InMemoryMessageQueueAdapter implements MessageQueuePort {
     }
 
     const now = Date.now();
-    const visibleMessages = queue.filter(msg => msg.visibleAt <= now);
+    const visibleMessages = queue.filter((msg) => msg.visibleAt <= now);
 
     const messagesToReturn = visibleMessages.slice(0, maxMessages);
 
     // Update visibility timeout for returned messages
-    messagesToReturn.forEach(msg => {
+    messagesToReturn.forEach((msg) => {
       msg.visibleAt = now + this.defaultVisibilityTimeout;
     });
 
-    return messagesToReturn.map(msg => ({
+    return messagesToReturn.map((msg) => ({
       messageId: msg.messageId,
       body: msg.body,
       receiptHandle: msg.receiptHandle,
@@ -102,7 +102,7 @@ export class InMemoryMessageQueueAdapter implements MessageQueuePort {
       return;
     }
 
-    const index = queue.findIndex(msg => msg.receiptHandle === receiptHandle);
+    const index = queue.findIndex((msg) => msg.receiptHandle === receiptHandle);
     if (index !== -1) {
       queue.splice(index, 1);
     }
@@ -125,7 +125,7 @@ export class InMemoryMessageQueueAdapter implements MessageQueuePort {
       return;
     }
 
-    const message = queue.find(msg => msg.receiptHandle === receiptHandle);
+    const message = queue.find((msg) => msg.receiptHandle === receiptHandle);
     if (message) {
       message.visibleAt = Date.now() + visibilityTimeout * 1000;
     }
@@ -138,7 +138,7 @@ export class InMemoryMessageQueueAdapter implements MessageQueuePort {
    */
   getAllMessages<T>(queueUrl: string): T[] {
     const queue = this.queues.get(queueUrl);
-    return queue ? queue.map(msg => msg.body) : [];
+    return queue ? queue.map((msg) => msg.body) : [];
   }
 
   /**
@@ -151,7 +151,7 @@ export class InMemoryMessageQueueAdapter implements MessageQueuePort {
     }
 
     const now = Date.now();
-    return queue.filter(msg => msg.visibleAt <= now).length;
+    return queue.filter((msg) => msg.visibleAt <= now).length;
   }
 
   /**
