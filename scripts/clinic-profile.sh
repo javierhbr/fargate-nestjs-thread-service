@@ -22,6 +22,17 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+# Load clinic environment if available
+if [ -f ".env.clinic" ]; then
+  echo -e "${BLUE}Loading .env.clinic configuration...${NC}"
+  set -a
+  source .env.clinic
+  set +a
+elif [ -f ".env" ]; then
+  echo -e "${YELLOW}Warning: .env.clinic not found, using .env${NC}"
+  echo -e "${YELLOW}Consider creating .env.clinic for optimized profiling${NC}"
+fi
+
 # Configuration
 TOOL=${1:-doctor}
 MESSAGE_COUNT=${2:-100}
@@ -44,8 +55,8 @@ echo -e "${GREEN}Messages:${NC}       ${MESSAGE_COUNT}"
 echo -e "${GREEN}Startup wait:${NC}   ${STARTUP_WAIT}s"
 echo ""
 
-# Check if dist/main.js exists
-if [ ! -f "dist/main.js" ]; then
+# Check if dist/src/main.js exists
+if [ ! -f "dist/src/main.js" ]; then
   echo -e "${YELLOW}Building application...${NC}"
   npm run build
   echo ""
@@ -60,16 +71,16 @@ echo -e "${BLUE}[1/4]${NC} Starting Clinic.js ${TOOL} profiler..."
 # Start the profiler in background
 case "$TOOL" in
   doctor)
-    npx clinic doctor -- node dist/main.js &
+    npx clinic doctor -- node dist/src/main.js &
     ;;
   bubble)
-    npx clinic bubbleprof -- node dist/main.js &
+    npx clinic bubbleprof -- node dist/src/main.js &
     ;;
   flame)
-    npx clinic flame -- node dist/main.js &
+    npx clinic flame -- node dist/src/main.js &
     ;;
   heap)
-    npx clinic heapprofiler -- node dist/main.js &
+    npx clinic heapprofiler -- node dist/src/main.js &
     ;;
 esac
 

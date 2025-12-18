@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
+import { ConfigModule } from '../../../config/config.module';
 import { LoggingModule } from '../../logging/logging.module';
 import { StepFunctionsService } from './step-functions.service';
 

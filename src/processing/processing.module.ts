@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule } from '../config/config.module';
 import { SharedModule } from '../shared/shared.module';
 import { WorkerPoolModule } from '../worker-pool/worker-pool.module';
 import { ExportApiService } from './services/export-api.service';
@@ -8,7 +9,7 @@ import { ExportJobConsumer } from './consumers/export-job.consumer';
 import { OverflowConsumer } from './consumers/overflow.consumer';
 
 @Module({
-  imports: [SharedModule, WorkerPoolModule],
+  imports: [ConfigModule, SharedModule, WorkerPoolModule],
   providers: [
     ExportApiService,
     TaskDispatcherService,

@@ -1,8 +1,9 @@
 import { Module } from '@nestjs/common';
-import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ConfigService } from '@nestjs/config';
 import { SqsModule } from '@ssut/nestjs-sqs';
 import { SQSClient } from '@aws-sdk/client-sqs';
 import { AppConfig } from './config/configuration';
+import { ConfigModule } from './config/config.module';
 import { SharedModule } from './shared/shared.module';
 import { WorkerPoolModule } from './worker-pool/worker-pool.module';
 import { ProcessingModule } from './processing/processing.module';

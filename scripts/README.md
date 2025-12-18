@@ -244,7 +244,27 @@ done
 
 ## Environment Setup
 
-For consistent profiling results, set these environment variables:
+### Profiling Environment (.env.clinic)
+
+The repository includes a `.env.clinic` file optimized for profiling. This configuration:
+
+- Uses `NODE_ENV=production` for cleaner logs
+- Sets `LOG_LEVEL=info` to reduce noise
+- Uses `httpbin.org` for the Export API (always available, no local server needed)
+- Reduces timeouts and retries for faster profiling
+- Configurable worker pool size
+
+**The script automatically loads `.env.clinic` if present, falling back to `.env` if not.**
+
+To customize worker pool size for a specific profiling run:
+
+```bash
+WORKER_POOL_SIZE=8 ./scripts/clinic-profile.sh doctor 100
+```
+
+### Manual Environment Setup
+
+For manual profiling or custom configurations:
 
 ```bash
 # Create .env file or add to shell profile
